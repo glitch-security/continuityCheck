@@ -1,0 +1,16 @@
+# Add known subdomains to monitor directly (one per line).
+# These FQDNs will be added to the database and probed for liveness and
+# change detection on every scan cycle, without running full enumeration.
+#
+# Useful for: third-party assets, partner domains, or subdomains you already
+# know about and want to track without rediscovery overhead.
+#
+# Lines starting with # are treated as comments and ignored.
+#
+# Example entries:
+admin.example.com
+api.example.com
+staging.example.com
+dev.example.com
+vpn.example.com
+mail.example.com

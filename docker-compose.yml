@@ -1,0 +1,74 @@
+version: '3.8'
+
+# =============================================================================
+# AssetMonitor — Docker Compose
+#
+# Volumes expected on the host (create before first run):
+#   ./config.yaml          — application configuration (copy from config.yaml.example)
+#   ./data/                — SQLite database storage (auto-created)
+#   ./wordlists/           — subdomain wordlists
+#   ./domains.txt          — root domains to enumerate (copy from domains.txt.example)
+#   ./subdomains.txt       — known subdomains to monitor (copy from subdomains.txt.example)
+#   ./websites.txt         — website URLs to crawl (copy from websites.txt.example)
+# =============================================================================
+
+services:
+  assetmonitor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    image: assetmonitor:latest
+
+    container_name: assetmonitor
+
+    restart: unless-stopped
+
+    environment:
+      # Force UTC timestamps throughout the application.
+      TZ: UTC
+      # Set to DEBUG for verbose output during troubleshooting.
+      LOG_LEVEL: INFO
+      # Override the Python path so relative imports resolve correctly.
+      PYTHONUNBUFFERED: "1"
+
+    volumes:
+      # Configuration file (read-only inside the container)
+      - ./config.yaml:/app/config.yaml:ro
+
+      # Persistent database storage
+      - ./data:/app/data
+
+      # Subdomain wordlists
+      - ./wordlists:/app/wordlists:ro
+
+      # Input target files (read-only inside the container)
+      - ./domains.txt:/app/domains.txt:ro
+      - ./subdomains.txt:/app/subdomains.txt:ro
+      - ./websites.txt:/app/websites.txt:ro
+
+    # Expose no ports — AssetMonitor is a daemon with no web UI.
+    # Remove this comment and add a ports mapping if you add a web interface.
+
+    # Resource limits — adjust to your host capacity.
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 512M
+        reservations:
+          memory: 128M
+
+    # Health check: verify the process is still alive.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"

@@ -1,0 +1,73 @@
+# =============================================================================
+# AssetMonitor — .gitignore
+# =============================================================================
+
+# ----- Database files -----
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# ----- Python bytecode -----
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ----- Virtual environments -----
+.venv/
+venv/
+env/
+ENV/
+.env/
+
+# ----- Environment / secrets -----
+.env
+.env.*
+*.env
+secrets.yaml
+secrets.yml
+
+# ----- User-specific config & target files -----
+# (kept out of version control; copy from *.example to get started)
+config.yaml
+domains.txt
+subdomains.txt
+websites.txt
+
+# ----- Generated reports -----
+report.json
+report.html
+reports/
+
+# ----- Screenshots -----
+screenshots/
+*.png
+*.jpg
+*.jpeg
+
+# ----- OS noise -----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ----- Editor / IDE -----
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ----- Pytest / coverage -----
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# ----- mypy / pyright -----
+.mypy_cache/
+.pyright/

@@ -1,0 +1,201 @@
+# =============================================================================
+# AssetMonitor — Example Configuration
+# Copy this file to config.yaml and fill in your values.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Scan settings — general timing and HTTP behaviour
+# -----------------------------------------------------------------------------
+scan:
+  # How often to re-scan all monitored assets (minutes).
+  # Default: 360 (every 6 hours).  Set lower for more aggressive monitoring.
+  interval_minutes: 360
+
+  # Maximum number of concurrent worker threads used during scanning.
+  concurrent_threads: 10
+
+  # Per-request HTTP timeout in seconds.
+  request_timeout_seconds: 10
+
+  # User-Agent string sent with every HTTP request.
+  user_agent: "Mozilla/5.0 (compatible; AssetMonitor/1.0; +https://github.com/asset-monitor)"
+
+  # Whether to honour robots.txt during web crawling.
+  respect_robots_txt: false
+
+  # Maximum crawl depth when spidering a website.
+  max_crawl_depth: 3
+
+  # Maximum number of pages to crawl per domain per scan cycle.
+  max_pages_per_domain: 500
+
+
+# -----------------------------------------------------------------------------
+# Enumeration — subdomain discovery techniques and DNS settings
+# -----------------------------------------------------------------------------
+enumeration:
+  techniques:
+    # Query certificate transparency logs (crt.sh etc.) for known FQDNs.
+    certificate_transparency: true
+
+    # Attempt DNS resolution of words from the wordlist against the target domain.
+    dns_bruteforce: true
+
+    # Query passive DNS databases (VirusTotal, SecurityTrails …).
+    passive_dns: true
+
+    # Scrape the Wayback Machine CDX API for historical subdomains.
+    wayback_machine: true
+
+    # Use search engine dorking (Google/Bing) to discover FQDNs.
+    # Requires manual interaction or a headless browser setup.
+    search_engine_dorking: false
+
+    # Extract Subject Alternative Names from TLS certificates.
+    ssl_san_extraction: true
+
+    # Parse discovered JavaScript files for additional hostnames.
+    js_analysis: true
+
+    # Attempt DNS zone transfers (AXFR) — usually blocked on public resolvers.
+    zone_transfer: true
+
+    # Reverse-IP lookup to find co-hosted domains.
+    reverse_ip: true
+
+  # Path to the subdomain wordlist used during DNS bruteforce.
+  wordlist_path: "./wordlists/subdomains.txt"
+
+  # Authoritative / recursive resolvers used for DNS lookups.
+  dns_resolvers:
+    - "8.8.8.8"      # Google Public DNS
+    - "8.8.4.4"      # Google Public DNS (secondary)
+    - "1.1.1.1"      # Cloudflare
+    - "1.0.0.1"      # Cloudflare (secondary)
+    - "9.9.9.9"      # Quad9
+
+  # Maximum number of simultaneous DNS resolution requests.
+  max_dns_concurrent: 50
+
+
+# -----------------------------------------------------------------------------
+# Verification — probing discovered subdomains for liveness and fingerprinting
+# -----------------------------------------------------------------------------
+verification:
+  # TCP ports to probe for HTTP/HTTPS services.
+  ports:
+    - 80
+    - 443
+    - 8080
+    - 8443
+    - 8888
+
+  # Check for subdomain takeover indicators (dangling DNS records).
+  takeover_check: true
+
+  # Fingerprint technologies (Wappalyzer-style detection) on live hosts.
+  technology_detection: true
+
+  # Capture full-page screenshots of live web services.
+  # Requires a headless browser (Playwright/Puppeteer) to be installed.
+  screenshot: false
+
+
+# -----------------------------------------------------------------------------
+# Monitoring — what to diff on every subsequent scan
+# -----------------------------------------------------------------------------
+monitoring:
+  change_detection:
+    # Hash the response body and alert when the hash changes.
+    content_hash: true
+
+    # Structural DOM diff (tag counts, attribute changes, etc.).
+    dom_structural_diff: true
+
+    # Track newly discovered and removed URL endpoints.
+    endpoint_inventory: true
+
+    # Alert when the detected technology stack changes.
+    technology_stack: true
+
+    # Flag abnormal response-size deviations (> 20% change).
+    response_size_anomaly: true
+
+    # Track JavaScript / CSS / image asset URLs and their content hashes.
+    asset_tracking: true
+
+    # Pixel-level visual diff of screenshots (requires screenshot: true).
+    visual_diff: false
+
+
+# -----------------------------------------------------------------------------
+# API keys — third-party data enrichment sources
+# -----------------------------------------------------------------------------
+api_keys:
+  # https://www.virustotal.com/gui/user/apikey
+  virustotal: ""
+
+  # https://securitytrails.com/app/account/credentials
+  securitytrails: ""
+
+  # https://account.shodan.io/
+  shodan: ""
+
+  # https://search.censys.io/account
+  censys_id: ""
+  censys_secret: ""
+
+
+# -----------------------------------------------------------------------------
+# Notifications — alert channels
+# -----------------------------------------------------------------------------
+notifications:
+  # Minimum severity level that triggers an alert.
+  # Allowed values (ascending severity): INFO | LOW | MEDIUM | HIGH | CRITICAL
+  min_severity: "MEDIUM"
+
+  # ---- Slack ---------------------------------------------------------------
+  slack:
+    enabled: false
+    # Slack incoming webhook URL from https://api.slack.com/apps
+    webhook_url: "https://hooks.slack.com/services/T000/B000/xxxx"
+    channel: "#security-alerts"       # informational — the webhook URL controls the channel
+    username: "AssetMonitor"
+    icon_emoji: ":shield:"
+
+  # ---- Telegram ------------------------------------------------------------
+  telegram:
+    enabled: false
+    # Token from @BotFather
+    bot_token: "123456789:ABCdefGHI..."
+    # Target chat ID (can be a group / channel; prefix with -100 for channels)
+    chat_id: "-1001234567890"
+
+  # ---- Discord -------------------------------------------------------------
+  discord:
+    enabled: false
+    # Discord server → channel → Integrations → Create Webhook
+    webhook_url: "https://discord.com/api/webhooks/000/xxx"
+    username: "AssetMonitor"
+
+  # ---- Email (SMTP) --------------------------------------------------------
+  email:
+    enabled: false
+    smtp_host: "smtp.gmail.com"
+    smtp_port: 587
+    smtp_username: "alerts@example.com"
+    smtp_password: "your-app-password"
+    use_tls: true                        # STARTTLS
+    from_address: "AssetMonitor <alerts@example.com>"
+    to_addresses:
+      - "security@example.com"
+      - "oncall@example.com"
+    subject_prefix: "[AssetMonitor]"
+
+  # ---- Generic Webhook -----------------------------------------------------
+  webhook:
+    enabled: false
+    # Full URL that will receive the JSON POST payload.
+    url: "https://your-siem.example.com/api/ingest"
+    # Optional shared secret added as X-AssetMonitor-Secret header.
+    secret: ""

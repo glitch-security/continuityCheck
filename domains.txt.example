@@ -1,0 +1,10 @@
+# Add root domains for full subdomain enumeration (one per line).
+# AssetMonitor will run all enabled enumeration techniques against each
+# domain listed here on every scan cycle.
+#
+# Lines starting with # are treated as comments and ignored.
+# Blank lines are also ignored.
+#
+# Example entries:
+example.com
+target-company.com

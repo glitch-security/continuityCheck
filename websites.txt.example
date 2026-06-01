@@ -1,0 +1,12 @@
+# Full URLs for content and structure monitoring (one per line).
+# AssetMonitor will crawl these URLs, hash page content, diff DOM structure,
+# track endpoints, and detect technology stack changes on every scan cycle.
+#
+# Use full URLs including the scheme (https:// or http://).
+# Lines starting with # are treated as comments and ignored.
+#
+# Example entries:
+https://example.com
+https://app.example.com
+https://admin.example.com/login
+https://api.example.com/v1
