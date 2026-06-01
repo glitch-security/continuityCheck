@@ -288,9 +288,9 @@ class SchedManager:
         # Passive DNS
         if techniques.passive_dns:
             try:
-                from src.enumeration.passive_dns import enumerate_passive_dns
+                from src.enumeration.passive_dns import aggregate_passive_dns
 
-                pdns_fqdns = await enumerate_passive_dns(
+                pdns_fqdns = await aggregate_passive_dns(
                     dom.domain, cfg.api_keys.model_dump()
                 )
                 discovered_fqdns.update(pdns_fqdns)
@@ -326,9 +326,9 @@ class SchedManager:
         # DNS bruteforce
         if techniques.dns_bruteforce:
             try:
-                from src.enumeration.dns_bruteforce import bruteforce_subdomains
+                from src.enumeration.dns_bruteforce import bruteforce_dns
 
-                bf_fqdns = await bruteforce_subdomains(
+                bf_fqdns = await bruteforce_dns(
                     dom.domain,
                     wordlist_path=cfg.enumeration.wordlist_path,
                     resolvers=cfg.enumeration.dns_resolvers,
