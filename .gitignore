@@ -71,3 +71,6 @@ coverage.xml
 # ----- mypy / pyright -----
 .mypy_cache/
 .pyright/
+
+# ----- Agent-internal codebase reference -----
+CODEBASE.md

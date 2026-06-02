@@ -27,31 +27,57 @@ _SECURITY_HEADERS: set[str] = {
 }
 
 
+def _normalize_techs(techs: list) -> list[dict]:
+    """Normalise a mixed list of str or dict tech entries to list[dict]."""
+    result: list[dict] = []
+    for t in techs or []:
+        if isinstance(t, dict):
+            result.append({"name": t.get("name", ""), "version": t.get("version", "") or ""})
+        elif isinstance(t, str):
+            result.append({"name": t, "version": ""})
+    return result
+
+
 def diff_technologies(
-    old_techs: list[str],
-    new_techs: list[str],
+    old_techs: list,
+    new_techs: list,
 ) -> dict:
     """
-    Compare two technology lists and return added / removed entries.
+    Compare two technology lists and return added / removed / version-changed entries.
 
-    Parameters
-    ----------
-    old_techs:
-        Technologies detected in a previous scan.
-    new_techs:
-        Technologies detected in the current scan.
+    Accepts both the legacy ``list[str]`` format and the current
+    ``list[dict]`` format (``{"name": str, "version": str}``).
 
     Returns
     -------
     dict with keys:
-        - ``added``   (list[str])
-        - ``removed`` (list[str])
+        - ``added``           (list[dict]) – techs present now but not before
+        - ``removed``         (list[dict]) – techs that were present before but are gone
+        - ``version_changed`` (list[dict]) – same tech, different version;
+                                             each entry: ``{name, old_version, new_version}``
     """
-    old_set = set(old_techs or [])
-    new_set = set(new_techs or [])
+    old_list = _normalize_techs(old_techs)
+    new_list = _normalize_techs(new_techs)
+
+    old_map = {t["name"]: t["version"] for t in old_list}
+    new_map = {t["name"]: t["version"] for t in new_list}
+
+    old_names = set(old_map)
+    new_names = set(new_map)
+
+    added = [{"name": n, "version": new_map[n]} for n in sorted(new_names - old_names)]
+    removed = [{"name": n, "version": old_map[n]} for n in sorted(old_names - new_names)]
+
+    version_changed: list[dict] = []
+    for name in sorted(old_names & new_names):
+        ov, nv = old_map[name], new_map[name]
+        if ov and nv and ov != nv:
+            version_changed.append({"name": name, "old_version": ov, "new_version": nv})
+
     return {
-        "added": sorted(new_set - old_set),
-        "removed": sorted(old_set - new_set),
+        "added": added,
+        "removed": removed,
+        "version_changed": version_changed,
     }
 
 

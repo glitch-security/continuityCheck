@@ -361,7 +361,12 @@ function renderSubdomains() {
     const isNew = s.first_seen && (now - new Date(s.first_seen)) < ONE_DAY_MS;
     const newTag = isNew ? '<span class="new-badge">NEW</span>' : '';
     const takeoverTag = s.takeover_vulnerable ? '<span class="takeover-badge"><i class="bi bi-exclamation-triangle-fill"></i> TAKEOVER</span>' : '';
-    const techs = (s.technologies||[]).slice(0,4).map(t => `<span class="badge bg-secondary me-1" style="font-size:.65rem;">${esc(t)}</span>`).join('');
+    const techs = (s.technologies||[]).slice(0,5).map(t => {
+      const name = typeof t === 'object' ? t.name : t;
+      const ver  = typeof t === 'object' && t.version ? t.version : '';
+      const label = ver ? `${name} <span style="opacity:.7;font-size:.6rem;">${esc(ver)}</span>` : esc(name);
+      return `<span class="badge bg-secondary me-1" style="font-size:.65rem;" title="${esc(name)}${ver ? ' ' + esc(ver) : ''}">${label}</span>`;
+    }).join('');
     const ips = (s.ip_addresses||[]).slice(0,2).map(ip => `<code style="font-size:.72rem;color:#8b949e;">${esc(ip)}</code>`).join('<br>');
     const ports = (s.open_ports||[]).slice(0,8).map(p => portBadge(p.port, p.service)).join('');
     const httpCode = s.http_status ? `<span class="badge ${s.http_status < 300 ? 'bg-success' : s.http_status < 400 ? 'bg-info' : 'bg-danger'}" style="font-size:.68rem;">${s.http_status}</span>` : '—';

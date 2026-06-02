@@ -30,25 +30,27 @@ logger = logging.getLogger(__name__)
 
 TECH_SIGNATURES: dict[str, list[dict]] = {
     "WordPress": [
+        # Meta generator carries the version: WordPress 6.5.3
+        {"type": "meta", "pattern": r'name=["\']generator["\'][^>]*WordPress\s*([\d.]+)'},
+        {"type": "header", "header_name": "x-powered-by", "pattern": r"WordPress\s*([\d.]*)"},
         {"type": "body", "pattern": r"/wp-content/"},
         {"type": "body", "pattern": r"/wp-includes/"},
         {"type": "body", "pattern": r"wp-json"},
-        {"type": "header", "header_name": "x-powered-by", "pattern": r"WordPress"},
-        {"type": "meta", "pattern": r'name=["\']generator["\'][^>]*WordPress'},
         {"type": "cookie", "pattern": r"wordpress_"},
     ],
     "Drupal": [
+        # x-generator: Drupal 10 (https://www.drupal.org)
+        {"type": "header", "header_name": "x-generator", "pattern": r"Drupal\s*(\d+(?:\.\d+)*)"},
+        {"type": "meta", "pattern": r'name=["\']generator["\'][^>]*Drupal\s*(\d+)'},
         {"type": "body", "pattern": r"/sites/default/files/"},
         {"type": "body", "pattern": r'Drupal\.settings'},
-        {"type": "header", "header_name": "x-generator", "pattern": r"Drupal"},
-        {"type": "meta", "pattern": r'name=["\']generator["\'][^>]*Drupal'},
         {"type": "cookie", "pattern": r"SESS[a-f0-9]{32}"},
     ],
     "Joomla": [
+        {"type": "meta", "pattern": r'name=["\']generator["\'][^>]*Joomla!\s*([\d.]+)'},
         {"type": "body", "pattern": r"/media/jui/"},
         {"type": "body", "pattern": r"/media/system/js/"},
         {"type": "body", "pattern": r"Joomla!"},
-        {"type": "meta", "pattern": r'name=["\']generator["\'][^>]*Joomla'},
         {"type": "cookie", "pattern": r"[a-f0-9]{32}=\w+; path=/"},
     ],
     "Laravel": [
@@ -64,29 +66,34 @@ TECH_SIGNATURES: dict[str, list[dict]] = {
         {"type": "header", "header_name": "x-frame-options", "pattern": r"SAMEORIGIN"},
     ],
     "Rails": [
-        {"type": "header", "header_name": "x-powered-by", "pattern": r"Phusion Passenger"},
+        {"type": "header", "header_name": "x-powered-by", "pattern": r"Phusion Passenger(?:/([\d.]+))?"},
         {"type": "header", "header_name": "x-runtime", "pattern": r"\d+\.\d+"},
         {"type": "cookie", "pattern": r"_session_id"},
         {"type": "header", "header_name": "set-cookie", "pattern": r"_\w+_session"},
     ],
     "ASP.NET": [
+        # x-aspnet-version value IS the version string
+        {"type": "header", "header_name": "x-aspnet-version", "pattern": r"([\d.]+)"},
+        {"type": "header", "header_name": "x-aspnetmvc-version", "pattern": r"([\d.]+)"},
         {"type": "header", "header_name": "x-powered-by", "pattern": r"ASP\.NET"},
-        {"type": "header", "header_name": "x-aspnet-version", "pattern": r"\d+\.\d+"},
-        {"type": "header", "header_name": "x-aspnetmvc-version", "pattern": r"\d+\.\d+"},
         {"type": "cookie", "pattern": r"ASP\.NET_SessionId"},
     ],
     "PHP": [
-        {"type": "header", "header_name": "x-powered-by", "pattern": r"PHP/[\d.]+"},
+        # x-powered-by: PHP/8.3.1
+        {"type": "header", "header_name": "x-powered-by", "pattern": r"PHP/([\d.]+)"},
         {"type": "cookie", "pattern": r"PHPSESSID"},
     ],
     "Nginx": [
-        {"type": "header", "header_name": "server", "pattern": r"nginx"},
+        # server: nginx/1.24.0 — version group is optional (some servers hide it)
+        {"type": "header", "header_name": "server", "pattern": r"nginx(?:/([\d.]+))?"},
     ],
     "Apache": [
-        {"type": "header", "header_name": "server", "pattern": r"Apache"},
+        # server: Apache/2.4.57 (Debian)
+        {"type": "header", "header_name": "server", "pattern": r"Apache(?:/([\d.]+))?"},
     ],
     "IIS": [
-        {"type": "header", "header_name": "server", "pattern": r"Microsoft-IIS"},
+        # server: Microsoft-IIS/10.0
+        {"type": "header", "header_name": "server", "pattern": r"Microsoft-IIS(?:/([\d.]+))?"},
         {"type": "header", "header_name": "x-powered-by", "pattern": r"ASP\.NET"},
     ],
     "Cloudflare": [
@@ -102,25 +109,29 @@ TECH_SIGNATURES: dict[str, list[dict]] = {
         {"type": "body", "pattern": r"aws-amplify|amazonaws\.com"},
     ],
     "jQuery": [
-        {"type": "body", "pattern": r"jquery[.\-](\d+\.)+\d+(\.min)?\.js"},
-        {"type": "body", "pattern": r"jQuery v(\d+\.)+\d+"},
+        # jquery-3.7.1.min.js  or  jQuery v3.7.1
+        {"type": "body", "pattern": r"[Jj]query[.\-]([\d.]+)(?:\.min)?\.js"},
+        {"type": "body", "pattern": r"jQuery v([\d.]+)"},
     ],
     "React": [
-        {"type": "body", "pattern": r"react[.\-](\d+\.)+\d+(\.min)?\.js"},
+        # react-dom.production.min.js version encoded in filename or comment
+        {"type": "body", "pattern": r"react[.\-]([\d.]+)(?:\.min)?\.js"},
         {"type": "body", "pattern": r"__REACT_DEVTOOLS_GLOBAL_HOOK__|ReactDOM|react-dom"},
         {"type": "body", "pattern": r'data-reactroot|data-reactid'},
     ],
     "Vue": [
-        {"type": "body", "pattern": r"vue[.\-](\d+\.)+\d+(\.min)?\.js"},
+        {"type": "body", "pattern": r"vue[.\-]([\d.]+)(?:\.min)?\.js"},
         {"type": "body", "pattern": r"__vue_|Vue\.config|new Vue\(|createApp\("},
     ],
     "Angular": [
-        {"type": "body", "pattern": r"angular[.\-](\d+\.)+\d+(\.min)?\.js"},
-        {"type": "body", "pattern": r"ng-version=|ng-app=|angular\.module\("},
+        # ng-version="16.2.0" attribute injected at runtime by Angular
+        {"type": "body", "pattern": r'ng-version=["\']([^"\']+)'},
+        {"type": "body", "pattern": r"angular[.\-]([\d.]+)(?:\.min)?\.js"},
+        {"type": "body", "pattern": r"ng-app=|angular\.module\("},
         {"type": "body", "pattern": r"zone\.js"},
     ],
     "Bootstrap": [
-        {"type": "body", "pattern": r"bootstrap[.\-](\d+\.)+\d+(\.min)?\.(?:js|css)"},
+        {"type": "body", "pattern": r"bootstrap[.\-]([\d.]+)(?:\.min)?\.(?:js|css)"},
         {"type": "body", "pattern": r'class=["\'][^"\']*(?:navbar|container-fluid|btn-primary)'},
     ],
     "GraphQL": [
@@ -130,14 +141,14 @@ TECH_SIGNATURES: dict[str, list[dict]] = {
     ],
     "Swagger": [
         {"type": "body", "pattern": r"swagger-ui|swagger\.json|swagger\.yaml"},
-        {"type": "body", "pattern": r'"swagger"\s*:\s*"[23]\.0"'},
-        {"type": "body", "pattern": r'"openapi"\s*:\s*"3\.'},
+        {"type": "body", "pattern": r'"swagger"\s*:\s*"([23]\.[\d.]+)"'},
+        {"type": "body", "pattern": r'"openapi"\s*:\s*"(3\.[\d.]+)"'},
         {"type": "header", "header_name": "content-type", "pattern": r"application/vnd\.oai\.openapi"},
     ],
 }
 
 
-async def fingerprint(url: str, headers: dict, body: str) -> list[str]:
+async def fingerprint(url: str, headers: dict, body: str) -> list[dict]:
     """
     Apply all technology signatures to the given response data.
 
@@ -153,38 +164,47 @@ async def fingerprint(url: str, headers: dict, body: str) -> list[str]:
 
     Returns
     -------
-    Deduplicated list of detected technology names.
+    List of dicts ``{"name": str, "version": str}`` for each detected technology.
+    Version is an empty string when the signature cannot extract one.
     """
-    detected: list[str] = []
+    detected: list[dict] = []
     lower_headers = {k.lower(): v for k, v in headers.items()}
     cookie_header = lower_headers.get("set-cookie", "")
 
     for tech, rules in TECH_SIGNATURES.items():
-        matched = False
+        tech_matched = False
+        version: Optional[str] = None
+
         for rule in rules:
+            if tech_matched and version:
+                break  # already have both confirmation and a version string
+
             rtype = rule["type"]
             pattern = rule["pattern"]
+            m = None
 
             try:
                 if rtype == "header":
                     header_name = rule.get("header_name", "").lower()
                     value = lower_headers.get(header_name, "")
-                    matched = bool(re.search(pattern, value, re.IGNORECASE))
+                    m = re.search(pattern, value, re.IGNORECASE)
                 elif rtype == "body":
-                    matched = bool(re.search(pattern, body, re.IGNORECASE))
+                    m = re.search(pattern, body, re.IGNORECASE)
                 elif rtype == "cookie":
-                    matched = bool(re.search(pattern, cookie_header, re.IGNORECASE))
+                    m = re.search(pattern, cookie_header, re.IGNORECASE)
                 elif rtype == "meta":
-                    matched = bool(re.search(pattern, body, re.IGNORECASE))
+                    m = re.search(pattern, body, re.IGNORECASE)
             except re.error as exc:
                 logger.warning("Invalid regex pattern for %s: %s (%s)", tech, pattern, exc)
                 continue
 
-            if matched:
-                break
+            if m:
+                tech_matched = True
+                if not version and m.lastindex and m.group(1):
+                    version = m.group(1).strip()
 
-        if matched:
-            detected.append(tech)
+        if tech_matched:
+            detected.append({"name": tech, "version": version or ""})
 
     return detected
 

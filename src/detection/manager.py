@@ -308,20 +308,37 @@ class DetectionManager:
                     new_data.get("technologies") or [],
                 )
                 if tech_diff["added"]:
+                    added_labels = [
+                        f"{t['name']} {t['version']}".strip()
+                        for t in tech_diff["added"]
+                    ]
                     events.append(self._make_event(
                         "TECH_ADDED",
-                        "LOW",
+                        "MEDIUM",
                         fqdn,
-                        f"New technologies on {fqdn}: {tech_diff['added']}",
+                        f"New technologies detected on {fqdn}: {', '.join(added_labels)}",
                         tech_diff,
                     ))
                 if tech_diff["removed"]:
+                    removed_labels = [
+                        f"{t['name']} {t['version']}".strip()
+                        for t in tech_diff["removed"]
+                    ]
                     events.append(self._make_event(
                         "TECH_REMOVED",
                         "INFO",
                         fqdn,
-                        f"Technologies removed from {fqdn}: {tech_diff['removed']}",
+                        f"Technologies removed from {fqdn}: {', '.join(removed_labels)}",
                         tech_diff,
+                    ))
+                for vc in tech_diff.get("version_changed", []):
+                    events.append(self._make_event(
+                        "TECH_VERSION_CHANGED",
+                        "LOW",
+                        fqdn,
+                        f"{vc['name']} version changed on {fqdn}: "
+                        f"{vc['old_version']} → {vc['new_version']}",
+                        vc,
                     ))
             except Exception as exc:
                 logger.warning("Technology diff failed for %s: %s", fqdn, exc)
