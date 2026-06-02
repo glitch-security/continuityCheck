@@ -30,8 +30,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # ── Application source ─────────────────────────────────────────────────────
 COPY . .
 
-# ── Runtime directories ────────────────────────────────────────────────────
+# ── Runtime directories and default config ─────────────────────────────────
+# Bake a default config.yaml from the example so the container starts
+# with zero host-side setup required. Users can override via a mounted
+# config.yaml or manage all settings through the web dashboard.
 RUN mkdir -p /app/data /app/wordlists && \
+    cp /app/config.yaml.example /app/config.yaml && \
     chown -R assetmon:assetmon /app
 
 USER assetmon

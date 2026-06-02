@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AssetMonitor — Sign In</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <style>
+    body {
+      background: #0d1117;
+      color: #c9d1d9;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .login-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 380px;
+      padding: 2rem 2.25rem;
+    }
+    .form-control {
+      background: #0d1117;
+      border-color: #30363d;
+      color: #c9d1d9;
+    }
+    .form-control:focus {
+      background: #0d1117;
+      border-color: #388bfd;
+      color: #c9d1d9;
+      box-shadow: none;
+    }
+    .form-control::placeholder { color: #484f58; }
+    .form-label { font-size: .78rem; color: #8b949e; font-weight: 600; letter-spacing: .4px; text-transform: uppercase; }
+    .btn-primary { background: #238636; border-color: #238636; font-weight: 600; }
+    .btn-primary:hover { background: #2ea043; border-color: #2ea043; }
+    .btn-primary:disabled { opacity: .6; }
+    #error-msg { display: none; font-size: .82rem; }
+    .brand-icon { font-size: 2.5rem; color: #388bfd; }
+  </style>
+</head>
+<body>
+<div class="login-card">
+  <div class="text-center mb-4">
+    <div class="brand-icon"><i class="bi bi-shield-lock-fill"></i></div>
+    <h5 class="mt-2 mb-1 fw-bold">AssetMonitor</h5>
+    <p class="text-muted mb-0" style="font-size:.8rem;">Continuous attack-surface monitoring</p>
+  </div>
+
+  <div id="error-msg" class="alert alert-danger py-2 px-3 mb-3"></div>
+
+  <form id="login-form" novalidate>
+    <div class="mb-3">
+      <label class="form-label" for="username">Username</label>
+      <input type="text" class="form-control" id="username"
+             autocomplete="username" autofocus required placeholder="admin">
+    </div>
+    <div class="mb-4">
+      <label class="form-label" for="password">Password</label>
+      <input type="password" class="form-control" id="password"
+             autocomplete="current-password" required placeholder="••••••••">
+    </div>
+    <button type="submit" class="btn btn-primary w-100" id="login-btn">
+      <i class="bi bi-box-arrow-in-right me-1"></i> Sign In
+    </button>
+  </form>
+
+  <p class="text-center text-muted mt-3 mb-0" style="font-size:.72rem;">
+    Default credentials are printed in the container log on first start.
+  </p>
+</div>
+
+<script>
+document.getElementById('login-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn    = document.getElementById('login-btn');
+  const errMsg = document.getElementById('error-msg');
+  errMsg.style.display = 'none';
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span> Signing in…';
+
+  try {
+    const r = await fetch('/login', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({
+        username: document.getElementById('username').value.trim(),
+        password: document.getElementById('password').value,
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Login failed');
+    window.location.href = '/';
+  } catch (err) {
+    errMsg.textContent  = err.message;
+    errMsg.style.display = '';
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-box-arrow-in-right me-1"></i> Sign In';
+  }
+});
+
+// Allow Enter key submission (already handled by form submit)
+document.getElementById('password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('login-form').requestSubmit();
+});
+</script>
+</body>
+</html>

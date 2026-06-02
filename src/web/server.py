@@ -3,6 +3,10 @@ Flask web dashboard server.
 
 Provides:
   GET  /                            — full dashboard HTML
+  GET  /login                       — login page
+  POST /login                       — authenticate (JSON body: {username, password})
+  GET  /logout                      — clear session and redirect to /login
+  GET  /health                      — Docker healthcheck endpoint (no auth required)
   GET  /api/summary                 — aggregated stat cards
   GET  /api/domains                 — all root domains with subdomain stats
   GET  /api/subdomains              — all subdomains with status + latest port data
@@ -11,8 +15,21 @@ Provides:
   GET  /api/headers                 — latest HTTP header snapshots per subdomain
   POST /api/targets                 — add a new domain / subdomain / website
   DELETE /api/targets/domain/<id>   — delete a root domain (cascade)
+  PATCH /api/targets/domain/<id>    — assign a scan profile to a domain
+  GET  /api/domains/<id>/details    — per-domain full detail payload
+  GET  /api/profiles                — all scan profiles
+  POST /api/profiles                — create a custom profile
+  PUT  /api/profiles/<id>           — update a custom profile
+  DELETE /api/profiles/<id>         — delete a custom profile
   POST /api/scan/trigger            — trigger an on-demand scan (background thread)
   GET  /api/scan/status             — current scan state
+  GET  /api/settings                — current config overrides (from DB)
+  POST /api/settings                — save config overrides
+  GET  /api/session                 — current session info (username, role)
+  GET  /api/users                   — list users
+  POST /api/users                   — create a user
+  DELETE /api/users/<username>      — delete a user
+  POST /api/users/<username>/password — change a user's password
 
 Runs in a daemon thread alongside APScheduler so it never blocks the scan
 loop, and exits automatically when the main process exits.
@@ -20,14 +37,13 @@ loop, and exits automatically when the main process exits.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import threading
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Optional
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, redirect, render_template, request, session
 
 if TYPE_CHECKING:
     from ..config import AppConfig
@@ -74,12 +90,74 @@ def _ev_to_dict(ev: Any) -> dict:
     }
 
 
+# Paths that never require authentication
+_AUTH_EXEMPT = frozenset(["/login", "/logout", "/health"])
+
+
 def create_app(
     db: "DatabaseManager",
     config: "AppConfig",
     sched_manager: Optional["SchedManager"] = None,
 ) -> Flask:
     app = Flask(__name__, template_folder=_TEMPLATE_DIR)
+
+    # Stable secret key — persists across container restarts via DB
+    app.secret_key = db.get_or_create_flask_secret()
+    app.permanent_session_lifetime = timedelta(days=30)
+
+    # ------------------------------------------------------------------ #
+    # Auth gate
+    # ------------------------------------------------------------------ #
+
+    @app.before_request
+    def _require_login():
+        path = request.path
+        if path in _AUTH_EXEMPT or path.startswith("/static/"):
+            return None
+        if not session.get("authenticated"):
+            if path.startswith("/api/"):
+                return jsonify({"error": "Unauthorized"}), 401
+            return redirect("/login")
+        return None
+
+    # ------------------------------------------------------------------ #
+    # Login / logout
+    # ------------------------------------------------------------------ #
+
+    @app.route("/login", methods=["GET"])
+    def login_page():
+        if session.get("authenticated"):
+            return redirect("/")
+        return render_template("login.html")
+
+    @app.route("/login", methods=["POST"])
+    def login_submit():
+        data = request.get_json(silent=True) or {}
+        username = (data.get("username") or "").strip()
+        password = data.get("password") or ""
+        if not username or not password:
+            return jsonify({"error": "Username and password required"}), 400
+        role = db.verify_password(username, password)
+        if role is None:
+            return jsonify({"error": "Invalid credentials"}), 401
+        session.permanent = True
+        session["authenticated"] = True
+        session["username"] = username
+        session["role"] = role
+        return jsonify({"ok": True, "username": username, "role": role})
+
+    @app.route("/logout")
+    def logout():
+        session.clear()
+        return redirect("/login")
+
+    # ------------------------------------------------------------------ #
+    # Health endpoint (Docker healthcheck — no auth)
+    # ------------------------------------------------------------------ #
+
+    @app.route("/health")
+    def health():
+        return jsonify({"status": "ok"})
 
     # ------------------------------------------------------------------ #
     # Dashboard HTML
@@ -88,6 +166,18 @@ def create_app(
     @app.route("/")
     def dashboard():
         return render_template("dashboard.html")
+
+    # ------------------------------------------------------------------ #
+    # API — session info
+    # ------------------------------------------------------------------ #
+
+    @app.route("/api/session")
+    def api_session():
+        return jsonify({
+            "authenticated": session.get("authenticated", False),
+            "username": session.get("username"),
+            "role": session.get("role"),
+        })
 
     # ------------------------------------------------------------------ #
     # API — summary cards
@@ -125,8 +215,8 @@ def create_app(
             from sqlalchemy import select
             from ..database import Subdomain
 
-            with db.get_session() as session:
-                subs = list(session.scalars(
+            with db.get_session() as session_:
+                subs = list(session_.scalars(
                     select(Subdomain).order_by(Subdomain.fqdn)
                 ).all())
 
@@ -235,7 +325,7 @@ def create_app(
             from sqlalchemy import select, func as sqlfunc
             from ..database import Subdomain, SubdomainScan
 
-            with db.get_session() as session:
+            with db.get_session() as session_:
                 subq = (
                     select(
                         SubdomainScan.subdomain_id,
@@ -244,7 +334,7 @@ def create_app(
                     .group_by(SubdomainScan.subdomain_id)
                     .subquery()
                 )
-                pairs = session.execute(
+                pairs = session_.execute(
                     select(Subdomain, SubdomainScan)
                     .join(SubdomainScan, Subdomain.id == SubdomainScan.subdomain_id)
                     .join(
@@ -313,7 +403,6 @@ def create_app(
                     domain_id=parent.id,
                     discovery_technique="manual",
                 )
-                _append_to_file("subdomains.txt", value)
                 result = {"type": "subdomain", "id": sub.id, "value": sub.fqdn, "is_new": is_new}
 
                 if scan_now and sched_manager:
@@ -325,7 +414,7 @@ def create_app(
                 result = {"type": "website", "value": value}
 
                 if scan_now and sched_manager:
-                    _trigger_background_scan(sched_manager, None, {})
+                    _trigger_background_full_scan(sched_manager)
                     result["scan_triggered"] = True
 
             return jsonify(result), 201
@@ -343,7 +432,7 @@ def create_app(
         data = request.get_json(silent=True) or {}
         if "profile_id" not in data:
             return jsonify({"error": "profile_id is required"}), 400
-        profile_id = data["profile_id"]  # None clears the profile
+        profile_id = data["profile_id"]
         ok = db.set_domain_profile(domain_id, profile_id)
         if not ok:
             return jsonify({"error": "Domain not found"}), 404
@@ -484,6 +573,97 @@ def create_app(
         with _scan_lock:
             return jsonify(dict(_scan_state))
 
+    # ------------------------------------------------------------------ #
+    # API — settings (config overrides stored in DB)
+    # ------------------------------------------------------------------ #
+
+    @app.route("/api/settings", methods=["GET"])
+    def api_get_settings():
+        try:
+            overrides = db.get_config_overrides()
+            return jsonify(overrides)
+        except Exception as exc:
+            logger.error("api_get_settings error: %s", exc)
+            return jsonify({"error": str(exc)}), 500
+
+    @app.route("/api/settings", methods=["POST"])
+    def api_post_settings():
+        data = request.get_json(silent=True) or {}
+        try:
+            db.set_config_overrides(data)
+            db.apply_settings_to_config(config)
+            # Reschedule if interval changed
+            new_interval = (data.get("scan") or {}).get("interval_minutes")
+            if new_interval and sched_manager:
+                try:
+                    sched_manager.reschedule(int(new_interval))
+                except Exception as exc:
+                    logger.warning("reschedule failed: %s", exc)
+            return jsonify({"saved": True})
+        except Exception as exc:
+            logger.error("api_post_settings error: %s", exc)
+            return jsonify({"error": str(exc)}), 500
+
+    # ------------------------------------------------------------------ #
+    # API — user management
+    # ------------------------------------------------------------------ #
+
+    @app.route("/api/users", methods=["GET"])
+    def api_list_users():
+        try:
+            return jsonify(db.list_users())
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 500
+
+    @app.route("/api/users", methods=["POST"])
+    def api_create_user():
+        import hashlib
+        data = request.get_json(silent=True) or {}
+        username = (data.get("username") or "").strip()
+        password = data.get("password") or ""
+        role = (data.get("role") or "viewer").strip()
+        if not username or not password:
+            return jsonify({"error": "username and password required"}), 400
+        if role not in ("admin", "viewer"):
+            return jsonify({"error": "role must be admin or viewer"}), 400
+        try:
+            password_hash = "sha256:" + hashlib.sha256(password.encode()).hexdigest()
+            db.set_user(username, password_hash, role)
+            return jsonify({"created": True, "username": username, "role": role}), 201
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 500
+
+    @app.route("/api/users/<username>", methods=["DELETE"])
+    def api_delete_user(username: str):
+        if username == session.get("username"):
+            return jsonify({"error": "Cannot delete currently logged-in user"}), 400
+        try:
+            ok = db.delete_user(username)
+            if not ok:
+                return jsonify({"error": "User not found"}), 404
+            return jsonify({"deleted": True, "username": username})
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 500
+
+    @app.route("/api/users/<username>/password", methods=["POST"])
+    def api_change_password(username: str):
+        import hashlib
+        if session.get("role") != "admin" and username != session.get("username"):
+            return jsonify({"error": "Forbidden"}), 403
+        data = request.get_json(silent=True) or {}
+        new_password = data.get("password") or ""
+        if not new_password:
+            return jsonify({"error": "password required"}), 400
+        try:
+            user = db.get_user(username)
+            if user is None:
+                return jsonify({"error": "User not found"}), 404
+            password_hash = "sha256:" + hashlib.sha256(new_password.encode()).hexdigest()
+            db.set_user(username, password_hash, user.get("role", "viewer"))
+            return jsonify({"updated": True})
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 500
+
     return app
 
 
@@ -500,7 +680,6 @@ def _trigger_background_scan(
     import asyncio
 
     def _run() -> None:
-        global _scan_state
         with _scan_lock:
             if _scan_state["running"]:
                 return
@@ -529,7 +708,6 @@ def _trigger_background_full_scan(sched_manager: "SchedManager") -> None:
     import asyncio
 
     def _run() -> None:
-        global _scan_state
         with _scan_lock:
             if _scan_state["running"]:
                 return
@@ -551,8 +729,9 @@ def _trigger_background_full_scan(sched_manager: "SchedManager") -> None:
 
 def _append_to_file(path: str, value: str) -> None:
     """Append a value to a text file if not already present."""
+    import os as _os
     existing: list[str] = []
-    if os.path.isfile(path):
+    if _os.path.isfile(path):
         with open(path, "r", encoding="utf-8") as fh:
             existing = [line.strip() for line in fh if not line.strip().startswith("#")]
     if value not in existing:
@@ -571,10 +750,7 @@ def start_web_server(
     port: int = 5000,
     sched_manager: Optional["SchedManager"] = None,
 ) -> threading.Thread:
-    """Start the Flask dashboard in a daemon thread.
-
-    Returns the thread so the caller can join if needed.
-    """
+    """Start the Flask dashboard in a daemon thread."""
     app = create_app(db, config, sched_manager)
 
     thread = threading.Thread(

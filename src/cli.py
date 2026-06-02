@@ -119,6 +119,9 @@ def cli(ctx: click.Context, config: str, db: str, log_level: str) -> None:
 
     db_manager = DatabaseManager(db)
 
+    # Apply any DB-stored config overrides on top of the YAML config
+    db_manager.apply_settings_to_config(app_config)
+
     ctx.obj["config"] = app_config
     ctx.obj["db"] = db_manager
 
@@ -491,6 +494,26 @@ def daemon(ctx: click.Context) -> None:
 
     from src.notifications.manager import NotificationManager
     from src.scheduler import SchedManager
+
+    # Ensure at least one login exists; print generated password to logs on first run
+    temp_pwd = db.ensure_default_admin()
+    if temp_pwd:
+        console.print(
+            f"[bold yellow]┌─ DEFAULT ADMIN CREDENTIALS ──────────────────────────────────────┐[/bold yellow]"
+        )
+        console.print(
+            f"[bold yellow]│  Username:[/bold yellow] [bold cyan]admin[/bold cyan]"
+        )
+        console.print(
+            f"[bold yellow]│  Password:[/bold yellow] [bold cyan]{temp_pwd}[/bold cyan]"
+        )
+        console.print(
+            f"[bold yellow]│  Change via Settings → Users after first login.                  │[/bold yellow]"
+        )
+        console.print(
+            f"[bold yellow]└──────────────────────────────────────────────────────────────────┘[/bold yellow]"
+        )
+        logger.info("Default admin user created. Password: %s", temp_pwd)
 
     notif_mgr = NotificationManager(config, db)
     sched = SchedManager(config, db, notif_mgr)

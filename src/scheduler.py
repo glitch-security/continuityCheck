@@ -45,6 +45,8 @@ def _apply_profile_to_config(config: AppConfig, settings: dict) -> None:
         config.scan.max_crawl_depth = int(crawl_settings["max_depth"])
     if "max_pages" in crawl_settings:
         config.scan.max_pages_per_domain = int(crawl_settings["max_pages"])
+
+
 _SUBDOMAINS_FILE = "subdomains.txt"
 _WEBSITES_FILE = "websites.txt"
 
@@ -125,6 +127,16 @@ class SchedManager:
             self._scheduler.shutdown(wait=True)
             self._running = False
             logger.info("Scheduler stopped")
+
+    def reschedule(self, interval_minutes: int) -> None:
+        """Update the scan interval without restarting the scheduler."""
+        if not self._running:
+            return
+        self._scheduler.reschedule_job(
+            "full_scan",
+            trigger=IntervalTrigger(minutes=interval_minutes),
+        )
+        logger.info("Scan interval updated to %d minute(s)", interval_minutes)
 
     # ------------------------------------------------------------------
     # Internal bridge: APScheduler calls sync _run_scan_sync which in turn

@@ -108,6 +108,13 @@
       <button class="btn btn-sm btn-outline-primary" style="font-size:.75rem;padding:2px 10px;" onclick="refreshAll(true)">
         <i class="bi bi-arrow-clockwise"></i> Refresh
       </button>
+      <button class="btn btn-sm btn-outline-secondary" style="font-size:.75rem;padding:2px 10px;" onclick="openSettings()" title="Settings">
+        <i class="bi bi-gear"></i>
+      </button>
+      <span id="nav-username" class="text-muted" style="font-size:.72rem;"></span>
+      <a href="/logout" class="btn btn-sm btn-outline-secondary" style="font-size:.75rem;padding:2px 10px;" title="Sign out">
+        <i class="bi bi-box-arrow-right"></i>
+      </a>
     </div>
   </div>
 </nav>
@@ -588,6 +595,207 @@
         <button type="button" class="btn btn-primary btn-sm" id="pm-submit-btn" onclick="submitProfile()">
           <i class="bi bi-check-lg"></i> Save Profile
         </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- SETTINGS MODAL                                                         -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="modal fade modal-dark" id="settingsModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title"><i class="bi bi-gear me-2"></i>Settings</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <!-- Settings tabs -->
+        <ul class="nav nav-tabs px-3 pt-2" id="settings-tabs" style="border-bottom:1px solid #30363d;">
+          <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#st-scan"><i class="bi bi-clock me-1"></i>Scan</a></li>
+          <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#st-notify"><i class="bi bi-bell me-1"></i>Notifications</a></li>
+          <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#st-apikeys"><i class="bi bi-key me-1"></i>API Keys</a></li>
+          <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#st-users"><i class="bi bi-people me-1"></i>Users</a></li>
+        </ul>
+        <div class="tab-content p-3">
+
+          <!-- ── Scan settings ── -->
+          <div class="tab-pane fade show active" id="st-scan">
+            <div class="row g-3">
+              <div class="col-sm-6">
+                <label class="form-label" style="font-size:.78rem;color:#8b949e;">SCAN INTERVAL (minutes)</label>
+                <input type="number" class="form-control form-control-sm" id="cfg-interval" min="1" max="10080" placeholder="360">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label" style="font-size:.78rem;color:#8b949e;">REQUEST TIMEOUT (seconds)</label>
+                <input type="number" class="form-control form-control-sm" id="cfg-timeout" min="1" max="120" placeholder="10">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label" style="font-size:.78rem;color:#8b949e;">MAX CRAWL DEPTH</label>
+                <input type="number" class="form-control form-control-sm" id="cfg-crawl-depth" min="0" max="10" placeholder="3">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label" style="font-size:.78rem;color:#8b949e;">MAX PAGES PER DOMAIN</label>
+                <input type="number" class="form-control form-control-sm" id="cfg-crawl-pages" min="0" max="10000" placeholder="500">
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Notifications ── -->
+          <div class="tab-pane fade" id="st-notify">
+            <div class="mb-3">
+              <label class="form-label" style="font-size:.78rem;color:#8b949e;">MINIMUM ALERT SEVERITY</label>
+              <select class="form-select form-select-sm" id="cfg-min-severity">
+                <option value="CRITICAL">CRITICAL</option>
+                <option value="HIGH">HIGH</option>
+                <option value="MEDIUM" selected>MEDIUM</option>
+                <option value="LOW">LOW</option>
+                <option value="INFO">INFO</option>
+              </select>
+            </div>
+            <hr class="section-sep">
+            <div class="mb-3">
+              <div class="d-flex align-items-center mb-2">
+                <i class="bi bi-slack me-2" style="color:#e01e5a;"></i>
+                <strong style="font-size:.85rem;">Slack</strong>
+                <div class="form-check form-switch ms-auto mb-0">
+                  <input class="form-check-input" type="checkbox" id="cfg-slack-enabled">
+                </div>
+              </div>
+              <input type="url" class="form-control form-control-sm" id="cfg-slack-url" placeholder="https://hooks.slack.com/services/…">
+            </div>
+            <div class="mb-3">
+              <div class="d-flex align-items-center mb-2">
+                <i class="bi bi-telegram me-2" style="color:#2ca5e0;"></i>
+                <strong style="font-size:.85rem;">Telegram</strong>
+                <div class="form-check form-switch ms-auto mb-0">
+                  <input class="form-check-input" type="checkbox" id="cfg-telegram-enabled">
+                </div>
+              </div>
+              <div class="row g-2">
+                <div class="col-6"><input type="text" class="form-control form-control-sm" id="cfg-telegram-token" placeholder="Bot token"></div>
+                <div class="col-6"><input type="text" class="form-control form-control-sm" id="cfg-telegram-chat" placeholder="Chat ID"></div>
+              </div>
+            </div>
+            <div class="mb-3">
+              <div class="d-flex align-items-center mb-2">
+                <i class="bi bi-discord me-2" style="color:#5865f2;"></i>
+                <strong style="font-size:.85rem;">Discord</strong>
+                <div class="form-check form-switch ms-auto mb-0">
+                  <input class="form-check-input" type="checkbox" id="cfg-discord-enabled">
+                </div>
+              </div>
+              <input type="url" class="form-control form-control-sm" id="cfg-discord-url" placeholder="https://discord.com/api/webhooks/…">
+            </div>
+            <div class="mb-3">
+              <div class="d-flex align-items-center mb-2">
+                <i class="bi bi-envelope me-2" style="color:#8b949e;"></i>
+                <strong style="font-size:.85rem;">Email</strong>
+                <div class="form-check form-switch ms-auto mb-0">
+                  <input class="form-check-input" type="checkbox" id="cfg-email-enabled">
+                </div>
+              </div>
+              <div class="row g-2">
+                <div class="col-6"><input type="text" class="form-control form-control-sm" id="cfg-email-host" placeholder="SMTP host"></div>
+                <div class="col-2"><input type="number" class="form-control form-control-sm" id="cfg-email-port" placeholder="587" min="1" max="65535"></div>
+                <div class="col-4"><input type="text" class="form-control form-control-sm" id="cfg-email-from" placeholder="from@example.com"></div>
+                <div class="col-6"><input type="text" class="form-control form-control-sm" id="cfg-email-user" placeholder="SMTP username"></div>
+                <div class="col-6"><input type="password" class="form-control form-control-sm" id="cfg-email-pass" placeholder="SMTP password"></div>
+                <div class="col-12"><input type="text" class="form-control form-control-sm" id="cfg-email-to" placeholder="To: user1@example.com, user2@example.com"></div>
+              </div>
+            </div>
+            <div class="mb-2">
+              <div class="d-flex align-items-center mb-2">
+                <i class="bi bi-send me-2" style="color:#8b949e;"></i>
+                <strong style="font-size:.85rem;">Webhook</strong>
+                <div class="form-check form-switch ms-auto mb-0">
+                  <input class="form-check-input" type="checkbox" id="cfg-webhook-enabled">
+                </div>
+              </div>
+              <input type="url" class="form-control form-control-sm" id="cfg-webhook-url" placeholder="https://your-server.com/webhook">
+            </div>
+          </div>
+
+          <!-- ── API Keys ── -->
+          <div class="tab-pane fade" id="st-apikeys">
+            <p class="text-muted mb-3" style="font-size:.8rem;">These keys are stored encrypted-at-rest in the database and used during passive DNS enumeration.</p>
+            <div class="row g-3">
+              <div class="col-sm-6">
+                <label class="form-label" style="font-size:.78rem;color:#8b949e;">VIRUSTOTAL</label>
+                <input type="password" class="form-control form-control-sm" id="cfg-vt-key" placeholder="API key (leave blank to keep current)">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label" style="font-size:.78rem;color:#8b949e;">SECURITYTRAILS</label>
+                <input type="password" class="form-control form-control-sm" id="cfg-st-key" placeholder="API key">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label" style="font-size:.78rem;color:#8b949e;">SHODAN</label>
+                <input type="password" class="form-control form-control-sm" id="cfg-shodan-key" placeholder="API key">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label" style="font-size:.78rem;color:#8b949e;">CENSYS API ID</label>
+                <input type="password" class="form-control form-control-sm" id="cfg-censys-id" placeholder="API ID">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label" style="font-size:.78rem;color:#8b949e;">CENSYS SECRET</label>
+                <input type="password" class="form-control form-control-sm" id="cfg-censys-secret" placeholder="API secret">
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Users ── -->
+          <div class="tab-pane fade" id="st-users">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <span class="section-title">User Accounts</span>
+              <button class="btn btn-sm btn-outline-primary" style="font-size:.75rem;" onclick="openCreateUserForm()">
+                <i class="bi bi-person-plus"></i> Add User
+              </button>
+            </div>
+            <div id="users-list" class="mb-3"></div>
+            <hr class="section-sep">
+            <div id="create-user-form" class="d-none">
+              <div class="section-title mb-2">New User</div>
+              <div class="row g-2">
+                <div class="col-sm-4">
+                  <input type="text" class="form-control form-control-sm" id="new-username" placeholder="Username">
+                </div>
+                <div class="col-sm-4">
+                  <input type="password" class="form-control form-control-sm" id="new-password" placeholder="Password">
+                </div>
+                <div class="col-sm-2">
+                  <select class="form-select form-select-sm" id="new-role">
+                    <option value="admin">Admin</option>
+                    <option value="viewer" selected>Viewer</option>
+                  </select>
+                </div>
+                <div class="col-sm-2">
+                  <button class="btn btn-sm btn-success w-100" onclick="createUser()">Create</button>
+                </div>
+              </div>
+            </div>
+            <hr class="section-sep">
+            <div class="section-title mb-2">Change My Password</div>
+            <div class="row g-2">
+              <div class="col-sm-4">
+                <input type="password" class="form-control form-control-sm" id="my-new-password" placeholder="New password">
+              </div>
+              <div class="col-sm-3">
+                <button class="btn btn-sm btn-outline-secondary w-100" onclick="changeMyPassword()">Update Password</button>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /tab-content -->
+      </div>
+      <div class="modal-footer justify-content-between">
+        <span class="text-muted" style="font-size:.75rem;" id="settings-status"></span>
+        <div>
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary btn-sm ms-2" onclick="saveSettings()">
+            <i class="bi bi-check-lg"></i> Save Settings
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -1519,11 +1727,249 @@ function showToast(message, type = 'info') {
   el.addEventListener('hidden.bs.toast', () => el.remove());
 }
 
+// ── Settings ─────────────────────────────────────────────────────────────────
+let _settingsData = {};
+
+async function openSettings() {
+  try {
+    const r = await fetch('/api/settings');
+    _settingsData = r.ok ? await r.json() : {};
+  } catch(e) { _settingsData = {}; }
+
+  const scan  = _settingsData.scan  || {};
+  const notif = _settingsData.notifications || {};
+  const keys  = _settingsData.api_keys || {};
+  const slack    = notif.slack    || {};
+  const telegram = notif.telegram || {};
+  const discord  = notif.discord  || {};
+  const email    = notif.email    || {};
+  const webhook  = notif.webhook  || {};
+
+  _setVal('cfg-interval',       scan.interval_minutes      || '');
+  _setVal('cfg-timeout',        scan.request_timeout_seconds || '');
+  _setVal('cfg-crawl-depth',    scan.max_crawl_depth       || '');
+  _setVal('cfg-crawl-pages',    scan.max_pages_per_domain  || '');
+  _setVal('cfg-min-severity',   notif.min_severity         || 'MEDIUM');
+
+  document.getElementById('cfg-slack-enabled').checked   = !!slack.enabled;
+  _setVal('cfg-slack-url', slack.webhook_url || '');
+
+  document.getElementById('cfg-telegram-enabled').checked = !!telegram.enabled;
+  _setVal('cfg-telegram-token', telegram.bot_token   || '');
+  _setVal('cfg-telegram-chat',  telegram.chat_id     || '');
+
+  document.getElementById('cfg-discord-enabled').checked  = !!discord.enabled;
+  _setVal('cfg-discord-url', discord.webhook_url || '');
+
+  document.getElementById('cfg-email-enabled').checked    = !!email.enabled;
+  _setVal('cfg-email-host', email.smtp_host || '');
+  _setVal('cfg-email-port', email.smtp_port || '');
+  _setVal('cfg-email-from', email.from_address || '');
+  _setVal('cfg-email-user', email.username || '');
+  _setVal('cfg-email-pass', email.password || '');
+  _setVal('cfg-email-to',   Array.isArray(email.to) ? email.to.join(', ') : (email.to || ''));
+
+  document.getElementById('cfg-webhook-enabled').checked  = !!webhook.enabled;
+  _setVal('cfg-webhook-url', webhook.url || '');
+
+  // API keys — never pre-fill; user types to replace
+  _setVal('cfg-vt-key',        '');
+  _setVal('cfg-st-key',        '');
+  _setVal('cfg-shodan-key',    '');
+  _setVal('cfg-censys-id',     '');
+  _setVal('cfg-censys-secret', '');
+
+  document.getElementById('settings-status').textContent = '';
+  document.getElementById('create-user-form').classList.add('d-none');
+
+  await loadUsers();
+  new bootstrap.Modal(document.getElementById('settingsModal')).show();
+}
+
+function _setVal(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.value = val ?? '';
+}
+
+async function saveSettings() {
+  const payload = {
+    scan: {
+      interval_minutes:        _numVal('cfg-interval')     || undefined,
+      request_timeout_seconds: _numVal('cfg-timeout')      || undefined,
+      max_crawl_depth:         _numVal('cfg-crawl-depth')  || undefined,
+      max_pages_per_domain:    _numVal('cfg-crawl-pages')  || undefined,
+    },
+    notifications: {
+      min_severity: document.getElementById('cfg-min-severity').value,
+      slack: {
+        enabled:     document.getElementById('cfg-slack-enabled').checked,
+        webhook_url: _strVal('cfg-slack-url'),
+      },
+      telegram: {
+        enabled:   document.getElementById('cfg-telegram-enabled').checked,
+        bot_token: _strVal('cfg-telegram-token'),
+        chat_id:   _strVal('cfg-telegram-chat'),
+      },
+      discord: {
+        enabled:     document.getElementById('cfg-discord-enabled').checked,
+        webhook_url: _strVal('cfg-discord-url'),
+      },
+      email: {
+        enabled:      document.getElementById('cfg-email-enabled').checked,
+        smtp_host:    _strVal('cfg-email-host'),
+        smtp_port:    _numVal('cfg-email-port') || undefined,
+        from_address: _strVal('cfg-email-from'),
+        username:     _strVal('cfg-email-user'),
+        password:     _strVal('cfg-email-pass'),
+        to:           _strVal('cfg-email-to').split(',').map(s=>s.trim()).filter(Boolean),
+      },
+      webhook: {
+        enabled: document.getElementById('cfg-webhook-enabled').checked,
+        url:     _strVal('cfg-webhook-url'),
+      },
+    },
+    api_keys: {},
+  };
+
+  // Only include API keys if the field was filled in
+  ['vt-key','st-key','shodan-key','censys-id','censys-secret'].forEach((id, i) => {
+    const v = _strVal('cfg-' + id);
+    if (v) {
+      const keyMap = {'vt-key':'virustotal','st-key':'securitytrails','shodan-key':'shodan','censys-id':'censys_id','censys-secret':'censys_secret'};
+      payload.api_keys[keyMap[id]] = v;
+    }
+  });
+
+  // Remove undefined scan values
+  Object.keys(payload.scan).forEach(k => { if (payload.scan[k] === undefined) delete payload.scan[k]; });
+
+  const statusEl = document.getElementById('settings-status');
+  statusEl.textContent = 'Saving…';
+  try {
+    const r = await fetch('/api/settings', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    statusEl.textContent = '✓ Saved';
+    showToast('Settings saved', 'success');
+    setTimeout(() => { statusEl.textContent = ''; }, 3000);
+  } catch(e) {
+    statusEl.textContent = '✗ ' + e.message;
+    showToast('Failed to save: ' + e.message, 'danger');
+  }
+}
+
+function _strVal(id) {
+  const el = document.getElementById(id);
+  return el ? el.value.trim() : '';
+}
+function _numVal(id) {
+  const v = _strVal(id);
+  return v ? parseInt(v) : null;
+}
+
+// ── User management ───────────────────────────────────────────────────────────
+let _usersData = [];
+let _sessionUser = null;
+
+async function loadUsers() {
+  try {
+    const r = await fetch('/api/users');
+    _usersData = r.ok ? await r.json() : [];
+    renderUsers();
+  } catch(e) { console.error('users', e); }
+}
+
+function renderUsers() {
+  const el = document.getElementById('users-list');
+  if (!el) return;
+  if (!_usersData.length) {
+    el.innerHTML = '<p class="text-muted" style="font-size:.8rem;">No users.</p>';
+    return;
+  }
+  const me = _sessionUser || '';
+  el.innerHTML = '<table class="table table-sm mb-0" style="font-size:.8rem;"><thead><tr><th>Username</th><th>Role</th><th></th></tr></thead><tbody>' +
+    _usersData.map(u => `<tr>
+      <td><code>${esc(u.username)}</code>${u.username === me ? ' <span class="badge bg-secondary" style="font-size:.6rem;">you</span>' : ''}</td>
+      <td><span class="badge ${u.role==='admin'?'bg-primary':'bg-secondary'}" style="font-size:.65rem;">${u.role}</span></td>
+      <td>${u.username !== me ? `<button class="btn btn-xs btn-outline-danger" style="font-size:.7rem;padding:1px 6px;" onclick="deleteUser('${esc(u.username)}')"><i class="bi bi-trash3"></i></button>` : ''}</td>
+    </tr>`).join('') +
+    '</tbody></table>';
+}
+
+function openCreateUserForm() {
+  document.getElementById('create-user-form').classList.toggle('d-none');
+  document.getElementById('new-username').focus();
+}
+
+async function createUser() {
+  const username = document.getElementById('new-username').value.trim();
+  const password = document.getElementById('new-password').value;
+  const role     = document.getElementById('new-role').value;
+  if (!username || !password) { showToast('Username and password required', 'warning'); return; }
+  try {
+    const r = await fetch('/api/users', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({username, password, role}),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    document.getElementById('new-username').value = '';
+    document.getElementById('new-password').value = '';
+    document.getElementById('create-user-form').classList.add('d-none');
+    showToast(`User "${username}" created`, 'success');
+    await loadUsers();
+  } catch(e) { showToast('Failed: ' + e.message, 'danger'); }
+}
+
+async function deleteUser(username) {
+  if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+  try {
+    const r = await fetch(`/api/users/${encodeURIComponent(username)}`, {method: 'DELETE'});
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    showToast(`Deleted user: ${username}`, 'success');
+    await loadUsers();
+  } catch(e) { showToast('Delete failed: ' + e.message, 'danger'); }
+}
+
+async function changeMyPassword() {
+  const newPwd = document.getElementById('my-new-password').value;
+  if (!newPwd) { showToast('Enter a new password', 'warning'); return; }
+  if (!_sessionUser) { showToast('Not logged in', 'warning'); return; }
+  try {
+    const r = await fetch(`/api/users/${encodeURIComponent(_sessionUser)}/password`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({password: newPwd}),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    document.getElementById('my-new-password').value = '';
+    showToast('Password updated', 'success');
+  } catch(e) { showToast('Failed: ' + e.message, 'danger'); }
+}
+
+async function loadSession() {
+  try {
+    const r = await fetch('/api/session');
+    const d = await r.json();
+    _sessionUser = d.username || null;
+    const el = document.getElementById('nav-username');
+    if (el && d.username) el.textContent = d.username;
+  } catch(e) {}
+}
+
 // ── Live filter bindings ─────────────────────────────────────────────────────
 document.getElementById('filter-subs-text').addEventListener('input', renderSubdomains);
 document.getElementById('filter-target').addEventListener('input', renderChanges);
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
+loadSession();
 loadScanStatus();
 refreshAll(true);
 </script>

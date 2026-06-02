@@ -1,10 +1,16 @@
 # =============================================================================
 # AssetMonitor — Docker Compose
 #
-# Before first run on Linux:
-#   mkdir -p data && chown 1000:1000 data
+# Zero-friction startup:
+#   docker-compose up -d
+#   open http://localhost:5000
 #
-# Windows / macOS with Docker Desktop — no extra steps needed.
+# Admin credentials are printed in the container log on first start.
+# Set DASHBOARD_SECRET below to lock in a specific admin password.
+#
+# Linux host only — pre-create the data directory before first run:
+#   mkdir -p data && chown 1000:1000 data
+# (macOS / Windows with Docker Desktop — no extra steps needed.)
 # =============================================================================
 
 services:
@@ -24,38 +30,37 @@ services:
       LOG_LEVEL: INFO
       PYTHONUNBUFFERED: "1"
 
+      # Set this to lock in the admin password (recommended for anything
+      # beyond a personal/local installation).  If unset, a random password
+      # is generated and printed to the container log on first start.
+      # DASHBOARD_SECRET: "changeme"
+
     # Resource limits (non-swarm / plain docker compose syntax)
     mem_limit: 768m
     cpus: "2.0"
     memswap_limit: 768m
 
     # NET_RAW enables SYN-mode nmap scanning (-sS) from the non-root user.
-    # The nmap binary already has cap_net_raw+ep set by the Dockerfile.
-    # Remove this if you prefer TCP-connect-only scanning with no capabilities.
+    # Remove if you prefer TCP-connect-only scanning with no capabilities.
     cap_add:
       - NET_RAW
 
     ports:
-      # Web dashboard — open http://localhost:5000 in your browser
+      # Web dashboard — http://localhost:5000
       - "5000:5000"
 
     volumes:
-      # Configuration (read-only)
-      - ./config.yaml:/app/config.yaml:ro
-
-      # Persistent database — must be writable by UID 1000 on Linux
+      # Persistent database and settings — must be writable by UID 1000 on Linux
       - ./data:/app/data
 
-      # Wordlists (read-only)
-      - ./wordlists:/app/wordlists:ro
+      # Optional: mount a custom config.yaml to override baked-in defaults
+      # - ./config.yaml:/app/config.yaml:ro
 
-      # Target input files (read-only)
-      - ./domains.txt:/app/domains.txt:ro
-      - ./subdomains.txt:/app/subdomains.txt:ro
-      - ./websites.txt:/app/websites.txt:ro
+      # Optional: mount wordlists for DNS bruteforce
+      # - ./wordlists:/app/wordlists:ro
 
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/summary', timeout=5)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=5)"]
       interval: 60s
       timeout: 15s
       retries: 3

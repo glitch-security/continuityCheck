@@ -324,6 +324,33 @@ class ScanProfile(Base):
         return f"<ScanProfile id={self.id} name={self.name!r} builtin={self.is_builtin}>"
 
 
+class AppSetting(Base):
+    """Key-value store for runtime-configurable settings (DB overrides YAML config)."""
+
+    __tablename__ = "app_settings"
+
+    key: str = Column(String(128), primary_key=True)
+    value: Optional[str] = Column(Text, nullable=True)
+    updated_at: datetime = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+
+    def __repr__(self) -> str:
+        return f"<AppSetting key={self.key!r}>"
+
+
+def _apply_config_overrides(model: Any, overrides: Dict[str, Any]) -> None:
+    """Recursively set override values on a Pydantic model tree."""
+    for key, value in overrides.items():
+        if isinstance(value, dict) and hasattr(model, key):
+            sub = getattr(model, key)
+            if sub is not None:
+                _apply_config_overrides(sub, value)
+        elif hasattr(model, key):
+            try:
+                setattr(model, key, value)
+            except Exception:
+                pass
+
+
 # Built-in profile definitions — seeded once on first run.
 _BUILTIN_PROFILES: List[Dict[str, Any]] = [
     {
@@ -1302,3 +1329,167 @@ class DatabaseManager:
                 "live_subs": int(r.live_subs or 0),
             })
         return result
+
+    # ------------------------------------------------------------------
+    # AppSetting operations
+    # ------------------------------------------------------------------
+
+    def get_setting(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        with self.get_session() as session:
+            row = session.get(AppSetting, key)
+            return row.value if row is not None else default
+
+    def set_setting(self, key: str, value: Optional[str]) -> None:
+        with self.get_session() as session:
+            row = session.get(AppSetting, key)
+            if row is None:
+                session.add(AppSetting(key=key, value=value, updated_at=_utcnow()))
+            else:
+                row.value = value
+                row.updated_at = _utcnow()
+
+    def get_all_settings(self) -> Dict[str, Optional[str]]:
+        with self.get_session() as session:
+            rows = list(session.scalars(select(AppSetting)).all())
+            return {r.key: r.value for r in rows}
+
+    # ------------------------------------------------------------------
+    # Config override operations (config.* keys in AppSetting)
+    # ------------------------------------------------------------------
+
+    def get_config_overrides(self) -> Dict[str, Any]:
+        """Return stored config overrides as a nested dict."""
+        all_settings = self.get_all_settings()
+        result: Dict[str, Any] = {}
+        for key, value in all_settings.items():
+            if not key.startswith("config."):
+                continue
+            dotted = key[len("config."):]
+            try:
+                parsed: Any = json.loads(value) if value is not None else None
+            except (json.JSONDecodeError, TypeError):
+                parsed = value
+            parts = dotted.split(".")
+            target: Dict[str, Any] = result
+            for part in parts[:-1]:
+                target = target.setdefault(part, {})
+            target[parts[-1]] = parsed
+        return result
+
+    def set_config_overrides(self, overrides: Dict[str, Any]) -> None:
+        """Store a nested config override dict as flat config.* rows."""
+        from sqlalchemy import delete as _delete
+
+        def _flatten(d: Dict[str, Any], prefix: str = ""):
+            for k, v in d.items():
+                full = f"{prefix}{k}"
+                if isinstance(v, dict):
+                    yield from _flatten(v, f"{full}.")
+                else:
+                    yield full, v
+
+        with self.get_session() as session:
+            session.execute(_delete(AppSetting).where(AppSetting.key.like("config.%")))
+            session.flush()
+            for dotted_key, value in _flatten(overrides):
+                serialized = json.dumps(value) if not isinstance(value, str) else value
+                session.add(AppSetting(
+                    key=f"config.{dotted_key}",
+                    value=serialized,
+                    updated_at=_utcnow(),
+                ))
+
+    def apply_settings_to_config(self, config: Any) -> None:
+        """Apply stored config.* overrides on top of an AppConfig object."""
+        overrides = self.get_config_overrides()
+        _apply_config_overrides(config, overrides)
+
+    # ------------------------------------------------------------------
+    # User management (user:<username> keys in AppSetting)
+    # ------------------------------------------------------------------
+
+    def get_user(self, username: str) -> Optional[Dict[str, Any]]:
+        value = self.get_setting(f"user:{username}")
+        if value is None:
+            return None
+        try:
+            return json.loads(value)
+        except Exception:
+            return None
+
+    def set_user(self, username: str, password_hash: str, role: str = "admin") -> None:
+        self.set_setting(f"user:{username}", json.dumps({
+            "password_hash": password_hash,
+            "role": role,
+        }))
+
+    def list_users(self) -> List[Dict[str, Any]]:
+        all_settings = self.get_all_settings()
+        users = []
+        for key, value in all_settings.items():
+            if not key.startswith("user:"):
+                continue
+            username = key[5:]
+            try:
+                data: Dict[str, Any] = json.loads(value) if value else {}
+            except Exception:
+                data = {}
+            users.append({"username": username, "role": data.get("role", "viewer")})
+        return sorted(users, key=lambda u: u["username"])
+
+    def delete_user(self, username: str) -> bool:
+        with self.get_session() as session:
+            row = session.get(AppSetting, f"user:{username}")
+            if row is None:
+                return False
+            session.delete(row)
+            return True
+
+    def verify_password(self, username: str, password: str) -> Optional[str]:
+        """Return the user's role if credentials are valid, else None."""
+        import hashlib
+        user = self.get_user(username)
+        if user is None:
+            return None
+        stored_hash = user.get("password_hash", "")
+        if stored_hash.startswith("sha256:"):
+            expected = "sha256:" + hashlib.sha256(password.encode()).hexdigest()
+            if stored_hash == expected:
+                return user.get("role", "viewer")
+        return None
+
+    def get_or_create_flask_secret(self) -> str:
+        """Return a stable Flask secret key, generating one on first call."""
+        key = self.get_setting("system:flask_secret")
+        if key:
+            return key
+        import secrets as _secrets
+        new_key = _secrets.token_hex(32)
+        self.set_setting("system:flask_secret", new_key)
+        return new_key
+
+    def ensure_default_admin(self) -> Optional[str]:
+        """Ensure at least one admin user exists.
+
+        If DASHBOARD_SECRET env var is set, it is always synced as the admin
+        password (so rotating the env var changes the password).
+        Otherwise, if no users exist, a random password is generated and returned
+        so the caller can log it.
+        """
+        import hashlib
+        import os
+        import secrets as _secrets
+
+        env_secret = os.environ.get("DASHBOARD_SECRET", "").strip()
+        if env_secret:
+            password_hash = "sha256:" + hashlib.sha256(env_secret.encode()).hexdigest()
+            self.set_user("admin", password_hash, "admin")
+            return None  # operator knows the password
+
+        if self.list_users():
+            return None  # users already exist
+
+        temp_password = _secrets.token_urlsafe(12)
+        password_hash = "sha256:" + hashlib.sha256(temp_password.encode()).hexdigest()
+        self.set_user("admin", password_hash, "admin")
+        return temp_password
