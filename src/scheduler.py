@@ -424,38 +424,52 @@ class SchedManager:
                     "DNS bruteforce failed for %s: %s", dom.domain, exc
                 )
 
-        # Upsert discovered FQDNs and generate NEW_SUBDOMAIN events
-        for fqdn in discovered_fqdns:
-            _, is_new = self._db.upsert_subdomain(
-                fqdn=fqdn,
-                domain_id=dom.id,
-                discovery_technique="enumeration",
-            )
-            subdomain_count += 1
-            if is_new:
-                ev = self._db.add_change_event(
-                    event_type="NEW_SUBDOMAIN",
-                    severity="HIGH",
-                    target=fqdn,
-                    description=f"New subdomain discovered for {dom.domain}: {fqdn}",
+        # Verify all discovered FQDNs: probe liveness, fingerprint, update DB
+        if discovered_fqdns:
+            try:
+                from src.verification.manager import VerificationManager
+
+                vm = VerificationManager(cfg, self._db)
+
+                # Snapshot old state before verification mutates the DB
+                old_states: dict[str, dict] = {}
+                for fqdn in discovered_fqdns:
+                    ex = self._db.get_subdomain(fqdn)
+                    if ex:
+                        old_states[fqdn] = {
+                            "live": ex.status == "alive",
+                            "a_records": list(ex.ip_addresses or []),
+                            "aaaa_records": [],
+                            "status_code": ex.http_status or 0,
+                            "technologies": ex.technologies or [],
+                            "cert_fingerprint": ex.cert_fingerprint,
+                            "takeover": (
+                                {"service": "unknown", "confidence": "unknown"}
+                                if ex.takeover_vulnerable else None
+                            ),
+                        }
+
+                # verify_batch probes each FQDN and upserts results into the DB
+                results = await vm.verify_batch(
+                    discovered_fqdns, dom.id, "enumeration"
                 )
-                new_events.append(ev)
+                subdomain_count = len([r for r in results if "error" not in r])
 
-        # Verification: probe live subdomains
-        try:
-            from src.verification import verify_subdomains  # type: ignore[import]
+                # Generate and persist typed change events
+                for res in results:
+                    fqdn = res.get("fqdn", "")
+                    if not fqdn or "error" in res:
+                        continue
+                    old = old_states.get(fqdn, {})
+                    ev_data_list = await vm.generate_change_events(fqdn, old, res)
+                    for ev_data in ev_data_list:
+                        ev = self._db.add_change_event(**ev_data)
+                        new_events.append(ev)
 
-            live_subs = self._db.get_live_subdomains(dom.id)
-            verified_events = await verify_subdomains(
-                live_subs, cfg, self._db
-            )
-            new_events.extend(verified_events)
-        except ImportError:
-            logger.debug("verification module not available — skipping")
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "Verification step failed for %s: %s", dom.domain, exc
-            )
+            except Exception as exc:  # noqa: BLE001
+                logger.error(
+                    "Verification failed for %s: %s", dom.domain, exc, exc_info=True
+                )
 
         return new_events, subdomain_count
 
@@ -503,20 +517,52 @@ class SchedManager:
         return new_events
 
     async def _scan_websites(self, urls: List[str]) -> List[ChangeEvent]:
-        """Crawl website URLs and generate change events for detected diffs."""
+        """Verify website URLs and generate change events."""
+        import urllib.parse
+
+        from src.verification.manager import VerificationManager
+
         new_events: List[ChangeEvent] = []
+        vm = VerificationManager(self._config, self._db)
 
-        try:
-            from src.verification import crawl_and_detect  # type: ignore[import]
+        for raw_url in urls:
+            try:
+                url = raw_url if raw_url.startswith(("http://", "https://")) else "https://" + raw_url
+                hostname = urllib.parse.urlparse(url).hostname or ""
+                if not hostname:
+                    logger.warning("Cannot parse hostname from website URL: %s", raw_url)
+                    continue
 
-            ws_events = await crawl_and_detect(urls, self._config, self._db)
-            new_events.extend(ws_events)
-        except ImportError:
-            logger.debug(
-                "crawl_and_detect not available in verification module — skipping"
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Website crawl/detect failed: %s", exc)
+                # Find or create a parent domain for this hostname
+                parts = hostname.split(".")
+                root = ".".join(parts[-2:]) if len(parts) >= 2 else hostname
+                domain = self._db.get_domain(root) or self._db.add_domain(root)
+
+                # Capture old state before verification
+                ex = self._db.get_subdomain(hostname)
+                old_state: dict = {}
+                if ex:
+                    old_state = {
+                        "live": ex.status == "alive",
+                        "a_records": list(ex.ip_addresses or []),
+                        "aaaa_records": [],
+                        "status_code": ex.http_status or 0,
+                        "technologies": ex.technologies or [],
+                        "cert_fingerprint": ex.cert_fingerprint,
+                        "takeover": (
+                            {"service": "unknown", "confidence": "unknown"}
+                            if ex.takeover_vulnerable else None
+                        ),
+                    }
+
+                result = await vm.verify_subdomain(hostname, domain.id, "website")
+                ev_data_list = await vm.generate_change_events(hostname, old_state, result)
+                for ev_data in ev_data_list:
+                    ev = self._db.add_change_event(**ev_data)
+                    new_events.append(ev)
+
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Website scan failed for %s: %s", raw_url, exc)
 
         return new_events
 
