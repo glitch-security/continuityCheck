@@ -1,8 +1,8 @@
 """
 APScheduler-based periodic scan scheduler for the asset monitoring tool.
 
-Loads domains from the database and from domains.txt / subdomains.txt /
-websites.txt, runs the full enumeration + verification + change-detection
+Loads domains from the database and from data/domains.txt / data/subdomains.txt /
+data/websites.txt, runs the full enumeration + verification + change-detection
 pipeline on the configured interval, dispatches notifications, and updates
 domain timestamps.
 """
@@ -24,7 +24,7 @@ from src.notifications.manager import NotificationManager
 
 logger = logging.getLogger(__name__)
 
-_DOMAINS_FILE = "domains.txt"
+_DOMAINS_FILE = "data/domains.txt"
 
 
 def _apply_profile_to_config(config: AppConfig, settings: dict) -> None:
@@ -47,8 +47,8 @@ def _apply_profile_to_config(config: AppConfig, settings: dict) -> None:
         config.scan.max_pages_per_domain = int(crawl_settings["max_pages"])
 
 
-_SUBDOMAINS_FILE = "subdomains.txt"
-_WEBSITES_FILE = "websites.txt"
+_SUBDOMAINS_FILE = "data/subdomains.txt"
+_WEBSITES_FILE = "data/websites.txt"
 
 
 def _read_lines(path: str) -> List[str]:

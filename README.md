@@ -133,7 +133,7 @@ docker-compose up -d
 # Stop
 docker-compose down
 
-# View logs
+# View logs (HTTP access logs + application logs stream here)
 docker-compose logs -f assetmonitor
 
 # Rebuild after code changes
@@ -144,6 +144,34 @@ docker-compose exec assetmonitor python assetmonitor.py scan
 
 # Shell into the container
 docker-compose exec assetmonitor bash
+```
+
+---
+
+## Recovering Dashboard Access
+
+If you cannot log in (lost password / no credentials were printed on first start):
+
+**Option 1 — Reset via CLI (no restart needed):**
+```bash
+# Generate a new random password and print it
+docker-compose exec assetmonitor python assetmonitor.py reset-admin
+
+# Or set a specific password
+docker-compose exec assetmonitor python assetmonitor.py reset-admin --password mynewpassword
+```
+
+**Option 2 — Set a fixed password via environment variable:**
+```yaml
+# docker-compose.yml — uncomment and set:
+DASHBOARD_SECRET: "mynewpassword"
+```
+Then `docker-compose up -d` — the password is synced on every start.
+
+**Finding the auto-generated password in the logs:**
+```bash
+# Search for the initial credentials block
+docker-compose logs assetmonitor | grep -A4 "DEFAULT ADMIN"
 ```
 
 ---

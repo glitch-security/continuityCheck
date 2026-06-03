@@ -2,11 +2,12 @@
 Click CLI for the asset monitoring tool.
 
 Entry point commands:
-  scan    — run enumeration + verification modules
-  report  — print a tabulated terminal report
-  export  — write a JSON or HTML report to a file
-  add     — add a domain / subdomain / website to monitoring
-  daemon  — start the APScheduler loop
+  scan         — run enumeration + verification modules
+  report       — print a tabulated terminal report
+  export       — write a JSON or HTML report to a file
+  add          — add a domain / subdomain / website to monitoring
+  daemon       — start the APScheduler loop
+  reset-admin  — reset (or create) the admin dashboard user
 """
 
 from __future__ import annotations
@@ -449,12 +450,10 @@ def add(ctx: click.Context, resource_type: str, value: str) -> None:
             f"[green]Subdomain {verb}:[/green] [cyan]{sub.fqdn}[/cyan] (id={sub.id})"
         )
 
-        # Persist to subdomains.txt to survive restarts
-        _append_to_file("subdomains.txt", value)
+        _append_to_file("data/subdomains.txt", value)
 
     elif resource_type == "website":
-        # Store in websites.txt
-        _append_to_file("websites.txt", value)
+        _append_to_file("data/websites.txt", value)
         console.print(f"[green]Website added to monitoring:[/green] [cyan]{value}[/cyan]")
 
     else:
@@ -466,13 +465,66 @@ def _append_to_file(path: str, value: str) -> None:
     """Append a value to a text file if it isn't already present."""
     import os
 
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     existing: List[str] = []
     if os.path.isfile(path):
         with open(path, "r", encoding="utf-8") as fh:
-            existing = [l.strip() for l in fh if not l.strip().startswith("#")]
+            existing = [ln.strip() for ln in fh if not ln.strip().startswith("#")]
     if value not in existing:
         with open(path, "a", encoding="utf-8") as fh:
             fh.write(f"{value}\n")
+
+
+# ---------------------------------------------------------------------------
+# reset-admin
+# ---------------------------------------------------------------------------
+
+
+@cli.command(name="reset-admin")
+@click.option(
+    "--password",
+    default=None,
+    help="New admin password. If omitted a random one is generated and printed.",
+)
+@click.pass_context
+def reset_admin(ctx: click.Context, password: Optional[str]) -> None:
+    """Reset (or create) the admin user with a new password.
+
+    \b
+    Usage inside Docker:
+      docker-compose exec assetmonitor python assetmonitor.py reset-admin
+      docker-compose exec assetmonitor python assetmonitor.py reset-admin --password mysecret
+    """
+    import hashlib
+    import secrets as _secrets
+
+    db: DatabaseManager = ctx.obj["db"]
+
+    if password:
+        new_pwd = password
+        generated = False
+    else:
+        new_pwd = _secrets.token_urlsafe(12)
+        generated = True
+
+    password_hash = "sha256:" + hashlib.sha256(new_pwd.encode()).hexdigest()
+    db.set_user("admin", password_hash, "admin")
+
+    if generated:
+        console.print(
+            "[bold yellow]┌─ ADMIN PASSWORD RESET ────────────────────────────────────────────┐[/bold yellow]"
+        )
+        console.print(
+            f"[bold yellow]│  Username:[/bold yellow] [bold cyan]admin[/bold cyan]"
+        )
+        console.print(
+            f"[bold yellow]│  Password:[/bold yellow] [bold cyan]{new_pwd}[/bold cyan]"
+        )
+        console.print(
+            "[bold yellow]└──────────────────────────────────────────────────────────────────┘[/bold yellow]"
+        )
+    else:
+        console.print("[bold green]Admin password updated.[/bold green]")
 
 
 # ---------------------------------------------------------------------------

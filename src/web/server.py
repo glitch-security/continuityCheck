@@ -410,7 +410,7 @@ def create_app(
                     result["scan_triggered"] = True
 
             else:  # website
-                _append_to_file("websites.txt", value)
+                _append_to_file("data/websites.txt", value)
                 result = {"type": "website", "value": value}
 
                 if scan_now and sched_manager:
@@ -730,6 +730,7 @@ def _trigger_background_full_scan(sched_manager: "SchedManager") -> None:
 def _append_to_file(path: str, value: str) -> None:
     """Append a value to a text file if not already present."""
     import os as _os
+    _os.makedirs(_os.path.dirname(path) or ".", exist_ok=True)
     existing: list[str] = []
     if _os.path.isfile(path):
         with open(path, "r", encoding="utf-8") as fh:
