@@ -808,7 +808,8 @@ let _subdomains  = [];
 let _changes     = [];
 let _portsData   = [];
 let _headersData = [];
-let _domainsData = [];
+let _domainsData  = [];
+let _websitesData = [];
 let _profilesData = [];
 let _countdown   = 60;
 let _timer       = null;
@@ -1229,20 +1230,22 @@ function populateProfileSelects() {
 // ── Targets ──────────────────────────────────────────────────────────────────
 async function loadTargets() {
   try {
-    const r = await fetch('/api/domains');
-    _domainsData = await r.json();
-    document.getElementById('tab-badge-targets').textContent = _domainsData.length;
+    const [rd, rw] = await Promise.all([fetch('/api/domains'), fetch('/api/websites')]);
+    _domainsData  = rd.ok ? await rd.json() : [];
+    _websitesData = rw.ok ? await rw.json() : [];
+    document.getElementById('tab-badge-targets').textContent = _domainsData.length + _websitesData.length;
     renderTargets();
   } catch(e) { console.error('targets', e); }
 }
 
 function renderTargets() {
   const tbody = document.getElementById('targets-body');
-  if (!_domainsData.length) {
+  if (!_domainsData.length && !_websitesData.length) {
     tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-crosshair"></i> No targets added yet. Click <strong>Add Target</strong> to get started.</td></tr>';
     return;
   }
-  tbody.innerHTML = _domainsData.map(d => {
+
+  const domainRows = _domainsData.map(d => {
     const livePct = d.total_subs > 0 ? Math.round(d.live_subs / d.total_subs * 100) : 0;
     const liveColor = livePct > 66 ? 'text-success' : livePct > 33 ? 'text-warning' : 'text-danger';
     const lastScan = d.last_scan
@@ -1251,6 +1254,7 @@ function renderTargets() {
     const profBadge = profileBadge(d.profile_mode, d.profile_name);
     return `<tr>
       <td>
+        <span class="badge bg-secondary me-1" style="font-size:.6rem;">Domain</span>
         <a href="#" onclick="openDomainDetail(${d.id},'${esc(d.domain)}');return false;" style="color:#58a6ff;text-decoration:none;">
           <code style="font-size:.85rem;">${esc(d.domain)}</code>
         </a>
@@ -1275,7 +1279,37 @@ function renderTargets() {
         </button>
       </td>
     </tr>`;
-  }).join('');
+  });
+
+  const websiteRows = _websitesData.map(w => {
+    const httpCode = w.http_status
+      ? `<span class="badge ${w.http_status < 300 ? 'bg-success' : w.http_status < 400 ? 'bg-info' : 'bg-danger'}" style="font-size:.68rem;">${w.http_status}</span>`
+      : '—';
+    const lastSeen = w.last_seen
+      ? `<span style="font-size:.75rem;">${fmtDate(w.last_seen)}</span>`
+      : '<span class="text-muted" style="font-size:.75rem;">Not scanned</span>';
+    return `<tr>
+      <td>
+        <span class="badge me-1" style="font-size:.6rem;background:#1f6feb;">Website</span>
+        <a href="${esc(w.url)}" target="_blank" rel="noopener" style="color:#58a6ff;text-decoration:none;font-size:.85rem;">
+          <i class="bi bi-globe2" style="font-size:.75rem;"></i> ${esc(w.url)}
+        </a>
+        ${w.page_title ? `<div class="text-muted" style="font-size:.72rem;margin-top:2px;">${esc(w.page_title)}</div>` : ''}
+      </td>
+      <td><span class="text-muted" style="font-size:.75rem;">—</span></td>
+      <td><span class="text-muted">—</span></td>
+      <td>${statusDot(w.status)} ${httpCode}</td>
+      <td>${lastSeen}</td>
+      <td class="text-muted" style="font-size:.75rem;">${w.hostname || '—'}</td>
+      <td>
+        <button class="btn btn-xs btn-outline-danger" style="font-size:.7rem;padding:2px 8px;" onclick="deleteWebsite('${esc(w.url)}')">
+          <i class="bi bi-trash3"></i>
+        </button>
+      </td>
+    </tr>`;
+  });
+
+  tbody.innerHTML = [...domainRows, ...websiteRows].join('');
 }
 
 // ── Domain detail panel ───────────────────────────────────────────────────────
@@ -1645,6 +1679,16 @@ async function deleteDomain(id, name) {
     if (_ddDomainId === id) closeDomainDetail();
     await loadTargets();
     await loadSummary();
+  } catch(e) { showToast('Delete failed: ' + e.message, 'danger'); }
+}
+
+async function deleteWebsite(url) {
+  if (!confirm(`Remove website "${url}" from monitoring?\n\nThis removes it from the watch list only.`)) return;
+  try {
+    const r = await _mfetch('/api/websites', {method: 'DELETE', body: JSON.stringify({url})});
+    if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+    showToast(`Removed website: ${url}`, 'success');
+    await loadTargets();
   } catch(e) { showToast('Delete failed: ' + e.message, 'danger'); }
 }
 

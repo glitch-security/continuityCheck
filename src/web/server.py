@@ -483,6 +483,77 @@ def create_app(
             return jsonify({"error": str(exc)}), 500
 
     # ------------------------------------------------------------------ #
+    # API — website list (websites.txt) with live-status enrichment
+    # ------------------------------------------------------------------ #
+
+    @app.route("/api/websites")
+    def api_websites():
+        import urllib.parse
+        _WEBSITES_FILE = "data/websites.txt"
+        try:
+            urls: list[str] = []
+            if os.path.isfile(_WEBSITES_FILE):
+                with open(_WEBSITES_FILE, encoding="utf-8") as fh:
+                    for raw in fh:
+                        line = raw.strip()
+                        if line and not line.startswith("#"):
+                            urls.append(line)
+
+            rows = []
+            for url in urls:
+                norm = url if url.startswith(("http://", "https://")) else "https://" + url
+                hostname = urllib.parse.urlparse(norm).hostname or ""
+                status = "unknown"
+                http_status = None
+                page_title = ""
+                last_seen = None
+                technologies: list = []
+                if hostname:
+                    sub = db.get_subdomain(hostname)
+                    if sub:
+                        status = sub.status
+                        http_status = sub.http_status
+                        page_title = sub.page_title or ""
+                        last_seen = sub.last_seen.isoformat() if sub.last_seen else None
+                        technologies = sub.technologies or []
+                rows.append({
+                    "url": url,
+                    "hostname": hostname,
+                    "status": status,
+                    "http_status": http_status,
+                    "page_title": page_title,
+                    "last_seen": last_seen,
+                    "technologies": technologies,
+                })
+            return jsonify(rows)
+        except Exception as exc:
+            logger.error("api_websites error: %s", exc)
+            return jsonify({"error": str(exc)}), 500
+
+    @app.route("/api/websites", methods=["DELETE"])
+    @require_admin
+    def api_delete_website():
+        _WEBSITES_FILE = "data/websites.txt"
+        data = request.get_json(silent=True) or {}
+        url = (data.get("url") or "").strip()
+        if not url:
+            return jsonify({"error": "url is required"}), 400
+        try:
+            lines: list[str] = []
+            if os.path.isfile(_WEBSITES_FILE):
+                with open(_WEBSITES_FILE, encoding="utf-8") as fh:
+                    lines = fh.readlines()
+            new_lines = [ln for ln in lines if ln.strip() != url]
+            if len(new_lines) == len(lines):
+                return jsonify({"error": "URL not found"}), 404
+            with open(_WEBSITES_FILE, "w", encoding="utf-8") as fh:
+                fh.writelines(new_lines)
+            return jsonify({"deleted": url})
+        except Exception as exc:
+            logger.error("api_delete_website error: %s", exc)
+            return jsonify({"error": str(exc)}), 500
+
+    # ------------------------------------------------------------------ #
     # API — assign a profile to a domain
     # ------------------------------------------------------------------ #
 
