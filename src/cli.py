@@ -525,10 +525,26 @@ def reset_admin(ctx: click.Context, password: Optional[str]) -> None:
             f"[bold yellow]│  Password:[/bold yellow] [bold cyan]{new_pwd}[/bold cyan]"
         )
         console.print(
+            "[bold yellow]│  Also saved to: data/initial_credentials.txt                     │[/bold yellow]"
+        )
+        console.print(
             "[bold yellow]└──────────────────────────────────────────────────────────────────┘[/bold yellow]"
         )
     else:
         console.print("[bold green]Admin password updated.[/bold green]")
+
+    # Write to mounted volume so it's readable from host
+    _creds_path = "data/initial_credentials.txt"
+    try:
+        os.makedirs("data", exist_ok=True)
+        with open(_creds_path, "w", encoding="utf-8") as _f:
+            _f.write("AssetMonitor — Admin Credentials\n")
+            _f.write("=" * 34 + "\n")
+            _f.write(f"Username : admin\n")
+            _f.write(f"Password : {new_pwd}\n")
+            _f.write("\nDelete this file after logging in.\n")
+    except Exception as _e:
+        logger.warning("Could not write credentials file: %s", _e)
 
 
 # ---------------------------------------------------------------------------
