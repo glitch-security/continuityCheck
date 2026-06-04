@@ -50,7 +50,6 @@ def _apply_profile_to_config(config: AppConfig, settings: dict) -> None:
 
 
 _SUBDOMAINS_FILE = "data/subdomains.txt"
-_WEBSITES_FILE = "data/websites.txt"
 
 
 def _read_lines(path: str) -> List[str]:
@@ -234,13 +233,17 @@ class SchedManager:
                 )
 
         # ----------------------------------------------------------------
-        # 4. Websites from websites.txt
+        # 4. Websites from websites.json (with per-URL technique flags)
         # ----------------------------------------------------------------
-        websites = _read_lines(_WEBSITES_FILE)
+        try:
+            from src.monitoring.website_store import read_websites
+            websites = read_websites()
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Failed to read website store: %s", exc)
+            websites = []
+
         if websites and self._config.scan.crawl_enabled:
-            logger.info(
-                "Processing %d website(s) from %s", len(websites), _WEBSITES_FILE
-            )
+            logger.info("Processing %d website(s)", len(websites))
             try:
                 ws_events = await self._scan_websites(websites)
                 all_new_events.extend(ws_events)
@@ -516,16 +519,21 @@ class SchedManager:
 
         return new_events
 
-    async def _scan_websites(self, urls: List[str]) -> List[ChangeEvent]:
-        """Verify website URLs and generate change events."""
+    async def _scan_websites(self, websites: List[dict]) -> List[ChangeEvent]:
+        """Run comprehensive scanning for all monitored website entries."""
         import urllib.parse
 
+        from src.monitoring.website_scanner import scan_website
         from src.verification.manager import VerificationManager
 
         new_events: List[ChangeEvent] = []
         vm = VerificationManager(self._config, self._db)
 
-        for raw_url in urls:
+        for entry in websites:
+            raw_url: str = entry if isinstance(entry, str) else entry.get("url", "")
+            techniques: dict = (
+                entry.get("techniques", {}) if isinstance(entry, dict) else {}
+            )
             try:
                 url = raw_url if raw_url.startswith(("http://", "https://")) else "https://" + raw_url
                 hostname = urllib.parse.urlparse(url).hostname or ""
@@ -533,12 +541,7 @@ class SchedManager:
                     logger.warning("Cannot parse hostname from website URL: %s", raw_url)
                     continue
 
-                # Find or create a parent domain for this hostname
-                parts = hostname.split(".")
-                root = ".".join(parts[-2:]) if len(parts) >= 2 else hostname
-                domain = self._db.get_domain(root) or self._db.add_domain(root)
-
-                # Capture old state before verification
+                # Capture old state before scan mutates the DB
                 ex = self._db.get_subdomain(hostname)
                 old_state: dict = {}
                 if ex:
@@ -555,11 +558,49 @@ class SchedManager:
                         ),
                     }
 
-                result = await vm.verify_subdomain(hostname, domain.id, "website")
-                ev_data_list = await vm.generate_change_events(hostname, old_state, result)
+                # Run full multi-technique scan
+                scan_result = await scan_website(
+                    url=url,
+                    techniques=techniques,
+                    config=self._config,
+                    db=self._db,
+                )
+
+                # Build a verification-compatible dict for change event generation
+                verify_compat = {
+                    "fqdn": hostname,
+                    "live": scan_result.get("live", False),
+                    "status_code": scan_result.get("http_status", 0),
+                    "technologies": scan_result.get("technologies", []),
+                    "a_records": [],
+                    "aaaa_records": [],
+                    "cert_fingerprint": None,
+                    "takeover": None,
+                    "discovery_technique": "website",
+                }
+
+                ev_data_list = await vm.generate_change_events(hostname, old_state, verify_compat)
                 for ev_data in ev_data_list:
                     ev = self._db.add_change_event(**ev_data)
                     new_events.append(ev)
+
+                # Emit CRITICAL/HIGH events for newly-found sensitive security files
+                for finding in scan_result.get("security_files", []):
+                    severity = finding.get("severity", "INFO")
+                    if severity in ("CRITICAL", "HIGH"):
+                        path = finding.get("path", "")
+                        note = finding.get("note", "")
+                        desc = f"Sensitive file accessible on {hostname}: {path}"
+                        if note:
+                            desc += f" — {note}"
+                        ev = self._db.add_change_event(
+                            event_type="SECURITY_FILE_FOUND",
+                            severity=severity,
+                            target=hostname,
+                            description=desc,
+                            diff_data=finding,
+                        )
+                        new_events.append(ev)
 
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Website scan failed for %s: %s", raw_url, exc)

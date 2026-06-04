@@ -10,6 +10,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     dnsutils \
     ca-certificates \
     curl \
+    # Playwright / Chromium runtime dependencies
+    libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libxkbcommon0 \
+    libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2 \
+    libpango-1.0-0 libpangocairo-1.0-0 libgtk-3-0 libx11-xcb1 \
     && setcap cap_net_raw+ep /usr/bin/nmap \
     && rm -rf /var/lib/apt/lists/*
 
@@ -27,6 +31,10 @@ RUN groupadd --system --gid 1000 assetmon && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Install Playwright's Chromium browser (runs as root before user switch)
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/.playwright-browsers
+RUN playwright install chromium --with-deps 2>/dev/null || true
+
 # ── Application source ─────────────────────────────────────────────────────
 COPY . .
 
@@ -34,7 +42,7 @@ COPY . .
 # Bake a default config.yaml from the example so the container starts
 # with zero host-side setup required. Users can override via a mounted
 # config.yaml or manage all settings through the web dashboard.
-RUN mkdir -p /app/data /app/wordlists && \
+RUN mkdir -p /app/data /app/wordlists /app/data/screenshots && \
     cp /app/config.yaml.example /app/config.yaml && \
     chown -R assetmon:assetmon /app
 

@@ -469,7 +469,9 @@ def create_app(
                     result["scan_triggered"] = True
 
             else:  # website
-                _append_to_file("data/websites.txt", value)
+                from ..monitoring.website_store import add_website
+                website_techniques = data.get("website_techniques") or {}
+                add_website(value, website_techniques if website_techniques else None)
                 result = {"type": "website", "value": value}
 
                 if scan_now and sched_manager:
@@ -489,25 +491,21 @@ def create_app(
     @app.route("/api/websites")
     def api_websites():
         import urllib.parse
-        _WEBSITES_FILE = "data/websites.txt"
         try:
-            urls: list[str] = []
-            if os.path.isfile(_WEBSITES_FILE):
-                with open(_WEBSITES_FILE, encoding="utf-8") as fh:
-                    for raw in fh:
-                        line = raw.strip()
-                        if line and not line.startswith("#"):
-                            urls.append(line)
+            from ..monitoring.website_store import read_websites
+            entries = read_websites()
 
             rows = []
-            for url in urls:
+            for entry in entries:
+                url = entry.get("url", "")
+                techniques = entry.get("techniques", {})
                 norm = url if url.startswith(("http://", "https://")) else "https://" + url
                 hostname = urllib.parse.urlparse(norm).hostname or ""
                 status = "unknown"
                 http_status = None
                 page_title = ""
                 last_seen = None
-                technologies: list = []
+                technologies_list: list = []
                 if hostname:
                     sub = db.get_subdomain(hostname)
                     if sub:
@@ -515,7 +513,7 @@ def create_app(
                         http_status = sub.http_status
                         page_title = sub.page_title or ""
                         last_seen = sub.last_seen.isoformat() if sub.last_seen else None
-                        technologies = sub.technologies or []
+                        technologies_list = sub.technologies or []
                 rows.append({
                     "url": url,
                     "hostname": hostname,
@@ -523,7 +521,8 @@ def create_app(
                     "http_status": http_status,
                     "page_title": page_title,
                     "last_seen": last_seen,
-                    "technologies": technologies,
+                    "technologies": technologies_list,
+                    "techniques": techniques,
                 })
             return jsonify(rows)
         except Exception as exc:
@@ -533,24 +532,36 @@ def create_app(
     @app.route("/api/websites", methods=["DELETE"])
     @require_admin
     def api_delete_website():
-        _WEBSITES_FILE = "data/websites.txt"
         data = request.get_json(silent=True) or {}
         url = (data.get("url") or "").strip()
         if not url:
             return jsonify({"error": "url is required"}), 400
         try:
-            lines: list[str] = []
-            if os.path.isfile(_WEBSITES_FILE):
-                with open(_WEBSITES_FILE, encoding="utf-8") as fh:
-                    lines = fh.readlines()
-            new_lines = [ln for ln in lines if ln.strip() != url]
-            if len(new_lines) == len(lines):
+            from ..monitoring.website_store import remove_website
+            removed = remove_website(url)
+            if not removed:
                 return jsonify({"error": "URL not found"}), 404
-            with open(_WEBSITES_FILE, "w", encoding="utf-8") as fh:
-                fh.writelines(new_lines)
             return jsonify({"deleted": url})
         except Exception as exc:
             logger.error("api_delete_website error: %s", exc)
+            return jsonify({"error": str(exc)}), 500
+
+    @app.route("/api/websites", methods=["PATCH"])
+    @require_admin
+    def api_update_website_techniques():
+        data = request.get_json(silent=True) or {}
+        url = (data.get("url") or "").strip()
+        techniques = data.get("techniques") or {}
+        if not url:
+            return jsonify({"error": "url is required"}), 400
+        try:
+            from ..monitoring.website_store import update_techniques
+            updated = update_techniques(url, techniques)
+            if not updated:
+                return jsonify({"error": "URL not found"}), 404
+            return jsonify({"updated": True, "url": url, "techniques": techniques})
+        except Exception as exc:
+            logger.error("api_update_website_techniques error: %s", exc)
             return jsonify({"error": str(exc)}), 500
 
     # ------------------------------------------------------------------ #

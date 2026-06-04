@@ -17,8 +17,14 @@ logger = logging.getLogger(__name__)
 
 PORTS: list[int] = [80, 443, 8080, 8443, 8888]
 
-# Status codes that indicate the host is "live"
-_LIVE_STATUS_CODES: set[int] = {200, 201, 204, 301, 302, 303, 307, 308, 401, 403, 405}
+# Status codes that indicate the host is "live" — any valid HTTP response means the
+# server is reachable, including 4xx/5xx (connection worked; server responded)
+_LIVE_STATUS_CODES: set[int] = {
+    200, 201, 204,
+    301, 302, 303, 307, 308,
+    400, 401, 403, 404, 405, 406, 409, 410, 422, 429,
+    500, 501, 502, 503, 504,
+}
 
 _TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 
@@ -83,6 +89,7 @@ async def probe_subdomain(
         "status_code": 0,
         "response_size": 0,
         "page_title": "",
+        "body": "",
         "response_headers": {},
         "redirect_chain": [],
         "port": 0,
@@ -142,6 +149,7 @@ async def probe_subdomain(
                 result["status_code"] = response.status_code
                 result["response_size"] = len(body_bytes)
                 result["page_title"] = _extract_title(body_text)
+                result["body"] = body_text
                 result["response_headers"] = dict(response.headers)
                 result["redirect_chain"] = full_chain
                 result["port"] = port

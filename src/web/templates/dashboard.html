@@ -448,7 +448,7 @@
           <div class="form-text">Controls which techniques, port scan mode, and crawl depth to use for this domain.</div>
         </div>
 
-        <!-- Enumeration technique overrides -->
+        <!-- Enumeration technique overrides (domain/subdomain only) -->
         <div id="at-enum-section">
           <hr class="section-sep">
           <div class="mb-2" style="font-size:.8rem;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;">Enumeration Technique Overrides <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#484f58;">(override profile for this scan only)</span></div>
@@ -482,6 +482,43 @@
             </div>
           </div>
           <div class="form-text mt-2">Overrides apply to this scan only. Persistent technique selection is controlled by the assigned profile.</div>
+        </div>
+
+        <!-- Website scanning techniques (website type only) -->
+        <div id="at-website-section" style="display:none;">
+          <hr class="section-sep">
+          <div class="mb-2" style="font-size:.8rem;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;">Scanning Techniques</div>
+          <div class="row g-2">
+            <div class="col-6 col-md-3 technique-toggle">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="wt-crawl" checked>
+                <label class="form-check-label" for="wt-crawl"><i class="bi bi-diagram-2 text-info" style="font-size:.75rem;"></i> BFS Crawl</label>
+              </div>
+              <div style="font-size:.7rem;color:#484f58;padding-left:1.5rem;">Discovers pages &amp; endpoints</div>
+            </div>
+            <div class="col-6 col-md-3 technique-toggle">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="wt-js" checked>
+                <label class="form-check-label" for="wt-js"><i class="bi bi-filetype-js text-warning" style="font-size:.75rem;"></i> JS Analysis</label>
+              </div>
+              <div style="font-size:.7rem;color:#484f58;padding-left:1.5rem;">Extracts API routes from JS</div>
+            </div>
+            <div class="col-6 col-md-3 technique-toggle">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="wt-secfiles" checked>
+                <label class="form-check-label" for="wt-secfiles"><i class="bi bi-file-earmark-lock text-danger" style="font-size:.75rem;"></i> Security Files</label>
+              </div>
+              <div style="font-size:.7rem;color:#484f58;padding-left:1.5rem;">Checks .env, .git, swagger…</div>
+            </div>
+            <div class="col-6 col-md-3 technique-toggle">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="wt-screenshot">
+                <label class="form-check-label" for="wt-screenshot"><i class="bi bi-camera text-success" style="font-size:.75rem;"></i> Screenshot</label>
+              </div>
+              <div style="font-size:.7rem;color:#484f58;padding-left:1.5rem;">Requires Playwright</div>
+            </div>
+          </div>
+          <div class="form-text mt-2">Selected techniques run on every scan of this website and are saved permanently.</div>
         </div>
         <hr class="section-sep">
         <div class="form-check form-switch">
@@ -1288,6 +1325,17 @@ function renderTargets() {
     const lastSeen = w.last_seen
       ? `<span style="font-size:.75rem;">${fmtDate(w.last_seen)}</span>`
       : '<span class="text-muted" style="font-size:.75rem;">Not scanned</span>';
+    const t = w.techniques || {};
+    const techBadges = [
+      t.crawl          ? '<span class="badge" style="font-size:.6rem;background:#1a2a3a;color:#58a6ff;border:1px solid #388bfd44;">crawl</span>' : '',
+      t.js_analysis    ? '<span class="badge" style="font-size:.6rem;background:#3d2a00;color:#e3b341;border:1px solid #d2992244;">js</span>' : '',
+      t.security_files ? '<span class="badge" style="font-size:.6rem;background:#3d1111;color:#f85149;border:1px solid #da363344;">secfiles</span>' : '',
+      t.screenshot     ? '<span class="badge" style="font-size:.6rem;background:#1a3a1a;color:#3fb950;border:1px solid #3fb95044;">screenshot</span>' : '',
+    ].filter(Boolean).join(' ');
+    const techs = (w.technologies || []).slice(0, 3).map(t2 => {
+      const n = typeof t2 === 'object' ? t2.name : t2;
+      return `<span class="badge bg-secondary" style="font-size:.65rem;">${esc(n)}</span>`;
+    }).join(' ');
     return `<tr>
       <td>
         <span class="badge me-1" style="font-size:.6rem;background:#1f6feb;">Website</span>
@@ -1295,8 +1343,9 @@ function renderTargets() {
           <i class="bi bi-globe2" style="font-size:.75rem;"></i> ${esc(w.url)}
         </a>
         ${w.page_title ? `<div class="text-muted" style="font-size:.72rem;margin-top:2px;">${esc(w.page_title)}</div>` : ''}
+        ${techBadges ? `<div style="margin-top:3px;">${techBadges}</div>` : ''}
       </td>
-      <td><span class="text-muted" style="font-size:.75rem;">—</span></td>
+      <td>${techs || '<span class="text-muted">—</span>'}</td>
       <td><span class="text-muted">—</span></td>
       <td>${statusDot(w.status)} ${httpCode}</td>
       <td>${lastSeen}</td>
@@ -1596,26 +1645,27 @@ function onTargetTypeChange() {
   const t = document.getElementById('at-type').value;
   const enumSection    = document.getElementById('at-enum-section');
   const profileSection = document.getElementById('at-profile-section');
+  const websiteSection = document.getElementById('at-website-section');
   const label = document.getElementById('at-value-label');
   const hint  = document.getElementById('at-value-hint');
   const input = document.getElementById('at-value');
+  enumSection.style.display    = 'none';
+  profileSection.style.display = 'none';
+  websiteSection.style.display = 'none';
   if (t === 'domain') {
-    enumSection.style.display = '';
+    enumSection.style.display    = '';
     profileSection.style.display = '';
     label.textContent = 'DOMAIN';
     hint.textContent  = 'Root domain to enumerate (e.g. example.com)';
     input.placeholder = 'example.com';
   } else if (t === 'subdomain') {
-    enumSection.style.display = 'none';
-    profileSection.style.display = 'none';
     label.textContent = 'SUBDOMAIN (FQDN)';
     hint.textContent  = 'Fully qualified subdomain (e.g. api.example.com)';
     input.placeholder = 'api.example.com';
   } else {
-    enumSection.style.display = 'none';
-    profileSection.style.display = 'none';
+    websiteSection.style.display = '';
     label.textContent = 'WEBSITE URL';
-    hint.textContent  = 'Full URL including scheme (e.g. https://example.com)';
+    hint.textContent  = 'Full URL to monitor (e.g. https://example.com)';
     input.placeholder = 'https://example.com';
   }
 }
@@ -1637,13 +1687,19 @@ async function submitAddTarget() {
     reverse_ip:               document.getElementById('t-revip').checked,
     dns_records:              document.getElementById('t-dnsrec').checked,
   };
+  const website_techniques = type === 'website' ? {
+    crawl:          document.getElementById('wt-crawl').checked,
+    js_analysis:    document.getElementById('wt-js').checked,
+    security_files: document.getElementById('wt-secfiles').checked,
+    screenshot:     document.getElementById('wt-screenshot').checked,
+  } : null;
   const profileId = parseInt(document.getElementById('at-profile-id').value) || null;
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Adding...';
   try {
     const r = await _mfetch('/api/targets', {
       method: 'POST',
-      body: JSON.stringify({type, value, scan_now: scanNow, techniques}),
+      body: JSON.stringify({type, value, scan_now: scanNow, techniques, website_techniques}),
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || r.statusText);

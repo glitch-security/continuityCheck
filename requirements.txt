@@ -17,3 +17,4 @@ flask
 flask-limiter
 bcrypt
 python-nmap
+playwright
