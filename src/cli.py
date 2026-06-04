@@ -551,7 +551,7 @@ def daemon(ctx: click.Context) -> None:
     from src.notifications.manager import NotificationManager
     from src.scheduler import SchedManager
 
-    # Ensure at least one login exists; print generated password to logs on first run
+    # Ensure at least one login exists; print generated password on first run
     temp_pwd = db.ensure_default_admin()
     if temp_pwd:
         console.print(
@@ -564,12 +564,30 @@ def daemon(ctx: click.Context) -> None:
             f"[bold yellow]│  Password:[/bold yellow] [bold cyan]{temp_pwd}[/bold cyan]"
         )
         console.print(
+            "[bold yellow]│  Also saved to: data/initial_credentials.txt                     │[/bold yellow]"
+        )
+        console.print(
             "[bold yellow]│  Change via Settings → Users after first login.                  │[/bold yellow]"
         )
         console.print(
             "[bold yellow]└──────────────────────────────────────────────────────────────────┘[/bold yellow]"
         )
-        logger.info("Default admin user created — log in and change the password shown above.")
+        logger.info("Default admin user created — credentials saved to data/initial_credentials.txt")
+
+        # Write to mounted volume so user can read from host without docker logs
+        _creds_path = "data/initial_credentials.txt"
+        try:
+            os.makedirs("data", exist_ok=True)
+            with open(_creds_path, "w", encoding="utf-8") as _f:
+                _f.write("AssetMonitor — Initial Admin Credentials\n")
+                _f.write("=" * 42 + "\n")
+                _f.write(f"Username : admin\n")
+                _f.write(f"Password : {temp_pwd}\n")
+                _f.write("\n")
+                _f.write("Change this password immediately via Settings → Users.\n")
+                _f.write("Delete this file after your first login.\n")
+        except Exception as _e:
+            logger.warning("Could not write credentials file: %s", _e)
 
     notif_mgr = NotificationManager(config, db)
     sched = SchedManager(config, db, notif_mgr)
